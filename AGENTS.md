@@ -13,9 +13,11 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 
 ## Layout
 
-- `multimodal_rag/config.py`: every setting (document path, vector store folder, model names, token limit, retry count, chunk sizes). Change settings here and nowhere else.
+- `multimodal_rag/config.py`: every setting (document path, vector store folder, model names, token limit, retry count, chunk sizes, number of retrieved chunks). Change settings here and nowhere else. It also loads `.env`.
+- `multimodal_rag/store.py`: the Chroma vector store and the embedding model, shared by ingestion and generation.
 - `multimodal_rag/ingest.py`: the whole ingestion pipeline. Run it from the project root with `python -m multimodal_rag.ingest`.
-- `notebooks/multi_modal_rag.ipynb`: the notebook the pipeline came from. It also holds the query and answer steps, which are not in a module yet.
+- `multimodal_rag/generate.py`: retrieval and answer generation. Run it from the project root with `python -m multimodal_rag.generate` to try the test questions.
+- `notebooks/multi_modal_rag.ipynb`: the notebook the pipeline came from.
 - `notebooks/01_docling_parse.ipynb`, `notebooks/02_native_docling_loader.ipynb`: earlier Docling and Pinecone experiments. The pipeline no longer uses either.
 
 ## Ingestion
@@ -35,19 +37,28 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 Models, all on OpenRouter and all set in `config.py`:
 
 - Image description: `dots-studio/dots-3-note-preview:free`. The free tier is sometimes rate-limited or unavailable, so calls are retried. `google/gemma-4-31b-it:free` was tried first and dropped because its free pool stayed rate-limited.
-- Embeddings: `nvidia/nemotron-3-embed-1b:free`, text only, 2048 dimensions. It needs `input_type=passage` for chunks and `input_type=query` for questions, which `NemotronEmbeddings` in `ingest.py` handles.
+- Embeddings: `nvidia/nemotron-3-embed-1b:free`, text only, 2048 dimensions. It needs `input_type=passage` for chunks and `input_type=query` for questions, which `NemotronEmbeddings` in `store.py` handles.
 
 If a description call still fails after the retries, the chunk is stored with its raw text and the failure is printed.
 
 ## Query path
 
-The query path exists only in `notebooks/multi_modal_rag.ipynb`. It retrieves the top 3 chunks from Chroma and sends their original text, table HTML, and images to `qwen/qwen3.8-27b` on Groq. A LangGraph query path is not built yet.
+`generate.py` runs two steps:
+
+1. **Retrieve.** The question is embedded and the top `RETRIEVED_CHUNK_COUNT` chunks are read from Chroma with a relevance score from 0 to 1.
+2. **Generate.** The chunks' original text, table HTML, and images are sent to `qwen/qwen3.8-27b` on Groq. The prompt tells the model to say so when the documents do not hold the answer.
+
+`answer_question(question)` returns a dict with `question`, `answer`, `model`, and `chunks`. Each chunk has `score`, `text`, `tables_html`, and `images_base64`. This is the function a FastAPI endpoint and UI will call later, so keep its return value JSON-friendly.
+
+Running the file alone answers the `TEST_QUESTIONS` at the top of `generate.py` and prints the retrieved chunks, the model name, and the answer. The last test question is not covered by the first 6 pages, to check the model refuses instead of guessing.
+
+There is no API, UI, or LangGraph graph yet.
 
 ## Environment
 
 Keys are read from `.env`:
 
 - `OPENROUTER_API_KEY`: image descriptions and embeddings
-- `GROQ_API_KEY`: answer generation in the notebook
+- `GROQ_API_KEY`: answer generation
 - `SARVAM_API_KEY`: not used. Sarvam's only image model, `gemma4`, needs beta access on `/v2` that this key does not have.
 - `PINECONE_API_KEY`: not used by the current pipeline

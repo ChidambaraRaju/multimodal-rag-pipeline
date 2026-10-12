@@ -8,20 +8,16 @@ All settings live in config.py.
 """
 
 import json
-import os
 
-from dotenv import load_dotenv
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
 from langchain_core.messages import HumanMessage
-from langchain_openai import OpenAIEmbeddings
 from langchain_openrouter import ChatOpenRouter
 from openrouter.errors import ResponseValidationError, TooManyRequestsResponseError
 from unstructured.chunking.title import chunk_by_title
 from unstructured.partition.pdf import partition_pdf
 
 from multimodal_rag import config
+from multimodal_rag.store import open_vector_store
 
 DESCRIPTION_PROMPT = """You are creating a searchable description for document content retrieval.
 
@@ -42,25 +38,6 @@ Generate a comprehensive, searchable description that covers:
 Make it detailed and searchable - prioritize findability over brevity.
 
 SEARCHABLE DESCRIPTION:"""
-
-
-class NemotronEmbeddings(Embeddings):
-    """Nemotron on OpenRouter. It expects input_type=passage for chunks and input_type=query for questions."""
-
-    def _model(self, input_type):
-        return OpenAIEmbeddings(
-            model=config.EMBEDDING_MODEL,
-            api_key=os.environ["OPENROUTER_API_KEY"],
-            base_url="https://openrouter.ai/api/v1",
-            check_embedding_ctx_length=False,
-            model_kwargs={"extra_body": {"input_type": input_type}},
-        )
-
-    def embed_documents(self, texts):
-        return self._model("passage").embed_documents(texts)
-
-    def embed_query(self, text):
-        return self._model("query").embed_query(text)
 
 
 def parse_pdf(pdf_path):
@@ -147,19 +124,13 @@ def build_documents(chunks):
 
 def store_documents(documents):
     """Embed the documents and save them in Chroma, replacing whatever was stored before."""
-    vector_store = Chroma(
-        persist_directory=str(config.VECTOR_STORE_DIRECTORY),
-        embedding_function=NemotronEmbeddings(),
-        collection_metadata={"hnsw:space": "cosine"},
-    )
+    vector_store = open_vector_store()
     vector_store.reset_collection()
     vector_store.add_documents(documents)
     return vector_store
 
 
 def main():
-    load_dotenv(config.PROJECT_ROOT / ".env")
-
     print(f"Parsing {config.DOCUMENT_PATH}")
     elements = parse_pdf(config.DOCUMENT_PATH)
     chunks = split_into_chunks(elements)
