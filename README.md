@@ -11,10 +11,11 @@ A retrieval-augmented generation pipeline for PDF documents that contain text, t
 3. **Describe.** Every chunk that holds a table or an image is sent to a vision model, which writes a searchable description of it. Text-only chunks skip this step.
 4. **Store.** Chunks are embedded and saved in a local [Chroma](https://www.trychroma.com/) vector store. The original text, tables, and images are kept alongside each chunk.
 
-**Generation** answers a question from that store:
+**Generation** is agentic. The answering model is given document search as a tool and decides for itself when to use it:
 
-1. **Retrieve.** The question is embedded and the most relevant chunks are fetched.
-2. **Generate.** The chunks' original text, tables, and images are sent to a multimodal model, which writes the answer. If the document does not hold the answer, the model says so.
+1. **Decide.** The model reads the question. A greeting or a question that is not about the document is answered directly.
+2. **Search.** Otherwise the model calls the search tool, which fetches the most relevant chunks. It can search again with a different query if the first results fall short.
+3. **Answer.** The model answers from the chunks' original text, tables, and images. If the document does not hold the answer, it says so.
 
 ## Setup
 
@@ -58,7 +59,7 @@ Ingest the document set in `config.py`:
 python -m multimodal_rag.ingest
 ```
 
-Ask the test questions and print the retrieved chunks, the model name, and the answer:
+Ask the test questions and print the searches the model made, the retrieved chunks, the model name, and the answer:
 
 ```bash
 python -m multimodal_rag.generate
@@ -75,7 +76,7 @@ result = answer_question("Your question here")
 print(result["answer"])
 ```
 
-`answer_question` returns a dictionary with `question`, `answer`, `model`, and `chunks`. Each chunk has `score`, `text`, `tables_html`, and `images_base64`.
+`answer_question` returns a dictionary with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `score`, `text`, `tables_html`, and `images_base64`.
 
 ## Configuration
 
@@ -87,8 +88,8 @@ Every setting lives in `multimodal_rag/config.py`:
 | `VECTOR_STORE_DIRECTORY` | Where the Chroma vector store is saved |
 | `IMAGE_DESCRIPTION_MODEL` | Vision model that describes images and tables (OpenRouter) |
 | `EMBEDDING_MODEL` | Text embedding model (OpenRouter) |
-| `GENERATION_MODEL` | Model that writes the answer (Groq) |
-| `RETRIEVED_CHUNK_COUNT` | How many chunks are retrieved per question |
+| `GENERATION_MODEL` | Model that decides when to search and writes the answer (Groq) |
+| `RETRIEVED_CHUNK_COUNT` | How many chunks each search returns |
 | `DESCRIPTION_MAX_TOKENS` | Longest description the vision model may write |
 | `MODEL_RETRY_ATTEMPTS` | Retries for a rate-limited or unavailable model call |
 | `CHUNK_MAX_CHARACTERS`, `CHUNK_NEW_AFTER_CHARACTERS`, `CHUNK_COMBINE_UNDER_CHARACTERS` | Chunk sizes |
@@ -102,7 +103,7 @@ multimodal_rag/
   config.py     all settings, loads .env
   store.py      Chroma vector store and embedding model
   ingest.py     ingestion pipeline
-  generate.py   retrieval and answer generation
+  generate.py   agent that answers questions, with document search as its tool
 notebooks/      experiments the pipeline grew out of
 ```
 
