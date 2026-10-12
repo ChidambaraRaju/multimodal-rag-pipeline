@@ -1,35 +1,29 @@
-"""Paths, environment, and model names for the attention-paper trial."""
+"""All ingestion settings in one place. Change values here, nothing else needs editing.
 
-import os
+API keys are read from .env: OPENROUTER_API_KEY.
+"""
+
 from pathlib import Path
 
-from dotenv import load_dotenv
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# Document to ingest
+DOCUMENT_PATH = PROJECT_ROOT / "attention-is-all-you-need-first6.pdf"
 
-ATTENTION_PAPER_FILENAME = "attention-is-all-you-need.pdf"
-PINECONE_INDEX_NAME = "multimodal-rag"
-NEMOTRON_EMBED_MODEL = "nvidia/nemotron-3-embed-1b:free"
-GROQ_PICTURE_MODEL = "qwen/qwen3.8-27b"
-NEMOTRON_EMBEDDING_DIMENSIONS = 2048
+# Where the Chroma vector store is saved. Each ingestion run replaces its contents.
+VECTOR_STORE_DIRECTORY = PROJECT_ROOT / "vector_store" / "chroma_db"
 
+# Models (all on OpenRouter)
+IMAGE_DESCRIPTION_MODEL = "dots-studio/dots-3-note-preview:free"  # describes images and tables
+EMBEDDING_MODEL = "nvidia/nemotron-3-embed-1b:free"  # text embeddings, 2048 dimensions
 
-def project_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+# Longest description the model may write, in tokens. The embedding model accepts at most 4096 tokens per chunk.
+DESCRIPTION_MAX_TOKENS = 3000
 
+# How many times to retry a model call that is rate-limited or temporarily unavailable
+MODEL_RETRY_ATTEMPTS = 8
 
-def load_project_env() -> None:
-    load_dotenv(project_root() / ".env")
-
-
-def attention_paper_path() -> Path:
-    pdf_path = project_root() / ATTENTION_PAPER_FILENAME
-    if not pdf_path.exists():
-        raise FileNotFoundError(pdf_path)
-    return pdf_path
-
-
-def picture_crop_directory(pdf_path: Path) -> Path:
-    crop_directory = project_root() / "crops" / pdf_path.stem
-    crop_directory.mkdir(parents=True, exist_ok=True)
-    return crop_directory
+# Chunking, in characters
+CHUNK_MAX_CHARACTERS = 3000  # hard limit per chunk
+CHUNK_NEW_AFTER_CHARACTERS = 2400  # start a new chunk after this many characters when possible
+CHUNK_COMBINE_UNDER_CHARACTERS = 500  # merge chunks smaller than this into a neighbour
