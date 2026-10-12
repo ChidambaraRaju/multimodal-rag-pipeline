@@ -1,1 +1,1 @@
-"""Ingestion for the attention-paper trial."""
+"""Ingestion for the multimodal RAG pipeline."""
