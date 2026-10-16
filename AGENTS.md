@@ -9,6 +9,8 @@ Always use the LangChain MCP servers before calling any LangChain, LangGraph, or
 - `docs-langchain` (`https://docs.langchain.com/mcp`): guides and how-tos
 - `reference-langchain` (`https://reference.langchain.com/mcp`): classes, methods, and signatures
 
+Likewise, use the `docs-llamaindex` MCP server (`https://developers.llamaindex.ai/mcp`) before calling the LlamaParse (`llama_cloud`) SDK. Its `grep_docs` tool needs a `section`; use `llama-cloud` for LlamaParse.
+
 Experiments belong in notebooks. The user reviews each notebook run and decides whether the approach stays. Move an approach into `.py` modules only after that decision.
 
 ## Layout
