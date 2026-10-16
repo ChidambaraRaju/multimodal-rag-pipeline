@@ -36,7 +36,7 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 
 Models, all on OpenRouter and all set in `config.py`:
 
-- Image description: `dots-studio/dots-3-note-preview:free`. The free tier is sometimes rate-limited or unavailable, so calls are retried. `google/gemma-4-31b-it:free` was tried first and dropped because its free pool stayed rate-limited.
+- Image description: `nvidia/nemotron-3.5-super-vl:free`. The free tier is sometimes rate-limited or unavailable, so calls are retried. `google/gemma-4-31b-it:free` was tried first and dropped because its free pool stayed rate-limited. `dots-studio/dots-3-note-preview:free` came next and was replaced by Nemotron.
 - Embeddings: `nvidia/nemotron-3-embed-1b:free`, text only, 2048 dimensions. It needs `input_type=passage` for chunks and `input_type=query` for questions, which `NemotronEmbeddings` in `store.py` handles.
 
 If a description call still fails after the retries, the chunk is stored with its raw text and the failure is printed.

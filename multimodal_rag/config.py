@@ -17,7 +17,7 @@ DOCUMENT_PATH = PROJECT_ROOT / "attention-is-all-you-need-first6.pdf"
 VECTOR_STORE_DIRECTORY = PROJECT_ROOT / "vector_store" / "chroma_db"
 
 # Models
-IMAGE_DESCRIPTION_MODEL = "dots-studio/dots-3-note-preview:free"  # OpenRouter, describes images and tables
+IMAGE_DESCRIPTION_MODEL = "nvidia/nemotron-3.5-super-vl:free"  # OpenRouter, describes images and tables
 EMBEDDING_MODEL = "nvidia/nemotron-3-embed-1b:free"  # OpenRouter, text embeddings, 2048 dimensions
 GENERATION_MODEL = "qwen/qwen3.8-27b"  # Groq, answers the question from the retrieved chunks
 
