@@ -44,6 +44,9 @@ Reply directly, without searching, to greetings and to questions that are not ab
 def search_document(query: str):
     """Search the document for the passages, tables and figures most relevant to the query."""
     results = open_vector_store().similarity_search_with_relevance_scores(query, k=config.RETRIEVED_CHUNK_COUNT)
+    results = [(document, score) for document, score in results if score >= config.MIN_RELEVANCE_SCORE]
+    if not results:
+        return "No relevant passages were found in the document for this query.", []
 
     chunks = []
     text_for_model = ""

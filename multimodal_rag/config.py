@@ -24,6 +24,9 @@ GENERATION_MODEL = "qwen/qwen3.8-27b"  # Groq, answers the question from the ret
 # How many chunks are retrieved for each question
 RETRIEVED_CHUNK_COUNT = 3
 
+# Chunks scoring below this (0 to 1) are not shown to the model, so weak matches do not fill the prompt
+MIN_RELEVANCE_SCORE = 0.3
+
 # Longest description the model may write, in tokens. The embedding model accepts at most 4096 tokens per chunk.
 DESCRIPTION_MAX_TOKENS = 3000
 

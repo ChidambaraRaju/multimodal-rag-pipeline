@@ -90,6 +90,7 @@ Every setting lives in `multimodal_rag/config.py`:
 | `EMBEDDING_MODEL` | Text embedding model (OpenRouter) |
 | `GENERATION_MODEL` | Model that decides when to search and writes the answer (Groq) |
 | `RETRIEVED_CHUNK_COUNT` | How many chunks each search returns |
+| `MIN_RELEVANCE_SCORE` | Chunks scoring below this are left out of the search results |
 | `DESCRIPTION_MAX_TOKENS` | Longest description the vision model may write |
 | `MODEL_RETRY_ATTEMPTS` | Retries for a rate-limited or unavailable model call |
 | `CHUNK_MAX_CHARACTERS`, `CHUNK_NEW_AFTER_CHARACTERS`, `CHUNK_COMBINE_UNDER_CHARACTERS` | Chunk sizes |

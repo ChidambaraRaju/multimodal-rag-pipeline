@@ -45,7 +45,7 @@ If a description call still fails after the retries, the chunk is stored with it
 
 Generation is agentic. `generate.py` builds an agent with LangChain's `create_agent`: `qwen/qwen3.8-27b` on Groq with one tool, `search_document`. The model decides whether to search. Greetings and questions that are not about the document are answered without a search.
 
-- **`search_document(query)`** embeds the query and reads the top `RETRIEVED_CHUNK_COUNT` chunks from Chroma, each with a relevance score from 0 to 1. The model receives the chunks' original text and table HTML. The full chunks are kept on the tool message as its artifact.
+- **`search_document(query)`** embeds the query and reads the top `RETRIEVED_CHUNK_COUNT` chunks from Chroma, each with a relevance score from 0 to 1. Chunks scoring below `MIN_RELEVANCE_SCORE` are dropped, so weak matches and their images do not push a request past Groq's free-tier limit of 7,000 input tokens per minute. If none remain, the tool tells the model nothing relevant was found. The model receives the chunks' original text and table HTML. The full chunks are kept on the tool message as its artifact.
 - **Images.** Groq only accepts a plain string as a tool result, so the `show_retrieved_images` middleware adds a message with the retrieved chunks' images right after the tool result. Do not move the images into the tool's return value.
 - **Rate limits.** Groq's free tier allows about 1,000 output tokens per minute for this model, and one question takes two or more model calls. `ModelRetryMiddleware` waits and retries on a rate limit, so several questions in a row are slow.
 - The system prompt tells the model to answer document questions only from the search results and to say so when they do not hold the answer.
