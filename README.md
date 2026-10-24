@@ -116,7 +116,7 @@ result = answer_question(agent, "Your question here")
 print(result["answer"])
 ```
 
-`answer_question` returns a dictionary with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `score`, `page_number`, `printed_page_number` (empty when the page has none), `text`, and `image_path`. `image_path` is set only for a chart, and `text` is then its description. Pass `history=[{"question": ..., "answer": ...}]` to give it the earlier turns of a conversation.
+`answer_question` returns a dictionary with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `id` (such as `page139-2`, the 2nd chunk of page 139), `score`, `page_number`, `printed_page_number` (empty when the page has none), `text`, and `image_path`. `image_path` is set only for a chart, and `text` is then its description. Pass `history=[{"question": ..., "answer": ...}]` to give it the earlier turns of a conversation.
 
 ## Configuration
 

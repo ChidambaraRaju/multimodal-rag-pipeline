@@ -52,6 +52,8 @@ Tested: `npm run build` and `npm run lint` pass. Headless Edge screenshots, driv
 Lessons:
 - `shadcn init -t vite` runs `git init` inside the new folder. That nested repository was deleted (it held only the scaffold's first commit), so the main repo tracks `frontend/`.
 - On Windows, stopping `npm run dev` leaves Vite's `node` process listening on port 5173. Find it with `netstat -ano` and stop it.
+- uvicorn keeps running the Python code it started with (unless started with `--reload`), but serves `frontend/dist` straight from disk. After changing both, restart the server, or a new UI meets an old API. The user may have their own server on port 8000; test on another port (such as 8001) instead of stopping it.
+- A page often contributes several chunks to one answer (page 123 gave three: `page123-2`, its chart, `page123-1`). The UI shows them under one tab in reading order, which is why chunks carry their `id`.
 - To see the UI without a browser tool: `uv run --no-project --with playwright python <script>` with `p.chromium.launch(channel="msedge")` uses the installed Edge, so no browser download is needed and nothing is added to the project.
 
 ## Next

@@ -68,7 +68,14 @@ export function Sources({ turnId, chunks, openPage, onOpenPage }: SourcesProps) 
   )
 }
 
-// The retrieved text of one page, and the descriptions of its retrieved figures
+// A page's chunks in reading order: its text chunks by their number (page139-2 is the 2nd), then its figures
+function inReadingOrder(chunks: Chunk[]) {
+  const position = (chunk: Chunk) =>
+    chunk.image_path ? Number.MAX_SAFE_INTEGER : Number(chunk.id.split("-").at(-1))
+  return [...chunks].sort((a, b) => position(a) - position(b) || a.id.localeCompare(b.id))
+}
+
+// The retrieved text of one page, and the descriptions of its retrieved figures, divided from each other
 function PageExcerpt({ id, page, chunks }: { id: string; page: number; chunks: Chunk[] }) {
   const printed = chunks[0].printed_page_number
   const relevance = Math.max(...chunks.map((chunk) => chunk.score))
@@ -81,19 +88,17 @@ function PageExcerpt({ id, page, chunks }: { id: string; page: number; chunks: C
         </span>
         <span className="text-muted-foreground tabular-nums">Relevance {relevance.toFixed(2)}</span>
       </header>
-      <div className="max-h-[28rem] space-y-6 overflow-y-auto px-4 py-4">
-        {chunks.map((chunk, index) =>
-          chunk.image_path ? (
-            <div key={index} className="space-y-2">
+      <div className="max-h-[28rem] divide-y overflow-y-auto px-4 py-4">
+        {inReadingOrder(chunks).map((chunk) => (
+          <div key={chunk.id} className="space-y-2 py-5 first:pt-0 last:pb-0">
+            {chunk.image_path && (
               <p className="text-sm text-muted-foreground">
                 The search matched this description of the figure on this page:
               </p>
-              <Markdown className="excerpt" text={chunk.text} />
-            </div>
-          ) : (
-            <Markdown key={index} className="excerpt" text={chunk.text} />
-          )
-        )}
+            )}
+            <Markdown className="excerpt" text={chunk.text} />
+          </div>
+        ))}
       </div>
     </section>
   )

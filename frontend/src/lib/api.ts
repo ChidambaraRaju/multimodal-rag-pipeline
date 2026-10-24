@@ -1,6 +1,7 @@
 // Calls to the FastAPI backend in multimodal_rag/api.py. During development, Vite forwards them to it.
 
 export type Chunk = {
+  id: string // page139-2 for the 2nd text chunk of page 139, or a figure's image name
   score: number // 0 to 1, higher is more relevant
   page_number: number // page in the PDF, counting from 1
   printed_page_number: string // as printed on the page, "" if none

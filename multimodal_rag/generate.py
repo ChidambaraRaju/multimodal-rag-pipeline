@@ -64,6 +64,7 @@ def search_document(query: str):
     text_for_model = ""
     for number, (document, score) in enumerate(results, start=1):
         chunk = {
+            "id": document.id,  # page139-2 for the 2nd text chunk of page 139, or a figure's image name
             "score": score,  # 0 to 1, higher is more relevant
             "page_number": document.metadata["page_number"],  # page in the PDF, counting from 1
             "printed_page_number": document.metadata["printed_page_number"],  # as printed on the page, "" if none
@@ -131,13 +132,13 @@ def answer_question(agent, question, history=()):
     final_message = messages[-1]
 
     search_queries = []
-    chunks = {}  # by text, since two searches can return the same chunk with different scores
+    chunks = {}  # by id, since two searches can return the same chunk with different scores
     for message in messages:
         if message.type == "ai":
             search_queries += [tool_call["args"]["query"] for tool_call in message.tool_calls]
         elif message.type == "tool" and message.artifact:
             for chunk in message.artifact:
-                chunks.setdefault(chunk["text"], chunk)
+                chunks.setdefault(chunk["id"], chunk)
 
     return {
         "question": question,
