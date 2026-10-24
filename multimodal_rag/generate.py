@@ -4,7 +4,7 @@ The model decides for itself whether to search. When it does, it calls the searc
 tool, reads the chunks that come back (passages with their tables, and figures), and then answers
 with the page numbers it used. Questions that need nothing from the document are answered without a search.
 
-Use answer_question() from other code, for example an API endpoint.
+Use build_agent() once and answer_question() for each question from other code, as api.py does.
 Run this file alone to try the test questions:  python -m multimodal_rag.generate
 All settings live in config.py. Run ingest.py first so the vector store exists.
 """
@@ -43,7 +43,9 @@ You may search again with a different query if the first results are not enough.
 Answer document questions only from what the tool returns, using its text, tables and figures. \
 Cite the page of each result you use, for example (page 12).
 If the results do not contain the answer, say "I don't have enough information to answer that question based on the document."
-Reply directly, without searching, to greetings and to questions that are not about the document."""
+Reply directly, without searching, to greetings and to questions that are not about the document.
+Earlier turns of the conversation help you understand a follow-up question, \
+but search again for any facts from the document that you need."""
 
 # Opened once and shared by every search. The model can run several searches at once, and opening
 # the store from several threads at the same time fails inside Chroma.
@@ -113,10 +115,19 @@ def build_agent():
     return create_agent(llm, [search_document], system_prompt=SYSTEM_PROMPT, middleware=[show_retrieved_images])
 
 
-def answer_question(question):
-    """Let the agent answer one question. Returns the answer, the model, and any searches and chunks it used."""
-    result = build_agent().invoke({"messages": [{"role": "user", "content": question}]})
-    messages = result["messages"]
+def answer_question(agent, question, history=()):
+    """Let the agent answer one question. Returns the answer, the model, and any searches and chunks it used.
+
+    history holds the earlier turns of the conversation, [{"question": ..., "answer": ...}], oldest first.
+    Only their text is passed on, not their search results or figures, so later model calls stay small.
+    """
+    conversation = []
+    for turn in history:
+        conversation.append({"role": "user", "content": turn["question"]})
+        conversation.append({"role": "assistant", "content": turn["answer"]})
+    conversation.append({"role": "user", "content": question})
+
+    messages = agent.invoke({"messages": conversation})["messages"]
     final_message = messages[-1]
 
     search_queries = []
@@ -157,8 +168,9 @@ def print_result(result):
 
 
 def main():
+    agent = build_agent()
     for question in TEST_QUESTIONS:
-        print_result(answer_question(question))
+        print_result(answer_question(agent, question))
 
 
 if __name__ == "__main__":

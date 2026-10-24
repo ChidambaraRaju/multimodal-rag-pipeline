@@ -35,6 +35,11 @@ RETRIEVED_CHUNK_COUNT = 3
 # Chunks scoring below this (0 to 1) are not shown to the model, so weak matches do not fill the prompt
 MIN_RELEVANCE_SCORE = 0.3
 
+# Chat memory in the API: how many earlier turns of a conversation the model sees, and how many
+# conversations the server keeps in memory before it drops the one used least recently
+CHAT_HISTORY_TURNS = 3
+MAX_CONVERSATIONS = 1000
+
 # Longest description the model may write, in tokens, its reasoning included.
 DESCRIPTION_MAX_TOKENS = 3000
 
