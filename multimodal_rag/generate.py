@@ -1,15 +1,15 @@
 """Answer a question with an agent that can search the ingested document.
 
 The model decides for itself whether to search. When it does, it calls the search_document
-tool, reads the chunks that come back (text, tables and images), and then answers.
-Questions that need nothing from the document are answered without a search.
+tool, reads the chunks that come back (passages with their tables, and figures), and then answers
+with the page numbers it used. Questions that need nothing from the document are answered without a search.
 
 Use answer_question() from other code, for example an API endpoint.
 Run this file alone to try the test questions:  python -m multimodal_rag.generate
 All settings live in config.py. Run ingest.py first so the vector store exists.
 """
 
-import json
+import base64
 
 from groq import RateLimitError
 from langchain.agents import create_agent
@@ -35,7 +35,8 @@ SYSTEM_PROMPT = """You answer questions about a document.
 
 Use the search_document tool whenever a question needs information from the document. \
 You may search again with a different query if the first results are not enough.
-Answer document questions only from what the tool returns, using its text, tables and images. \
+Answer document questions only from what the tool returns, using its text, tables and figures. \
+Cite the page of each result you use, for example (page 12).
 If the results do not contain the answer, say "I don't have enough information to answer that question based on the document."
 Reply directly, without searching, to greetings and to questions that are not about the document."""
 
@@ -51,18 +52,17 @@ def search_document(query: str):
     chunks = []
     text_for_model = ""
     for number, (document, score) in enumerate(results, start=1):
-        original_content = json.loads(document.metadata["original_content"])
         chunk = {
             "score": score,  # 0 to 1, higher is more relevant
-            "text": original_content["raw_text"],
-            "tables_html": original_content["tables_html"],
-            "images_base64": original_content["images_base64"],
+            "page_number": document.metadata["page_number"],  # page in the PDF, counting from 1
+            "printed_page_number": document.metadata["printed_page_number"],  # as printed on the page, "" if none
+            "text": document.page_content,  # a passage with its tables as HTML, or the description of a figure
+            "image_path": document.metadata.get("image_path"),  # a figure's image, relative to the project root
         }
         chunks.append(chunk)
 
-        text_for_model += f"--- Document {number} ---\nTEXT:\n{chunk['text']}\n\n"
-        for table_number, table in enumerate(chunk["tables_html"], start=1):
-            text_for_model += f"Table {table_number}:\n{table}\n\n"
+        kind = "Figure description (the figure itself follows)" if chunk["image_path"] else "Passage"
+        text_for_model += f"--- Result {number}, page {chunk['page_number']}: {kind} ---\n{chunk['text']}\n\n"
 
     # The model reads text_for_model. The chunks are kept on the tool message as its artifact.
     return text_for_model, chunks
@@ -70,17 +70,19 @@ def search_document(query: str):
 
 @before_model
 def show_retrieved_images(state, runtime):
-    """Groq only accepts text in a tool result, so the images of the retrieved chunks follow in their own message."""
+    """Groq only accepts text in a tool result, so the retrieved figures follow in their own message."""
     last_message = state["messages"][-1]
     if last_message.type != "tool" or not last_message.artifact:
         return None
 
-    images = [image for chunk in last_message.artifact for image in chunk["images_base64"]]
-    if not images:
+    figures = [chunk for chunk in last_message.artifact if chunk["image_path"]]
+    if not figures:
         return None
 
-    content = [{"type": "text", "text": "Images from the retrieved documents:"}]
-    for image in images:
+    content = []
+    for chunk in figures:
+        image = base64.b64encode((config.PROJECT_ROOT / chunk["image_path"]).read_bytes()).decode()
+        content.append({"type": "text", "text": f"Figure from page {chunk['page_number']}:"})
         content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image}"}})
     return {"messages": [HumanMessage(content=content)]}
 
@@ -120,7 +122,7 @@ def answer_question(question):
     return {
         "question": question,
         "answer": final_message.text,
-        "model": final_message.response_metadata.get("model_name", config.GENERATION_MODEL),
+        "model": final_message.response_metadata["model_name"],
         "search_queries": search_queries,  # empty when the model answered without searching
         "chunks": chunks,
     }
@@ -137,10 +139,8 @@ def print_result(result):
         print("SEARCHES: none, the model answered without searching\n")
 
     for number, chunk in enumerate(result["chunks"], start=1):
-        print(
-            f"CHUNK {number}  score={chunk['score']:.3f}  "
-            f"tables={len(chunk['tables_html'])}  images={len(chunk['images_base64'])}"
-        )
+        figure = f"  figure={chunk['image_path']}" if chunk["image_path"] else ""
+        print(f"CHUNK {number}  score={chunk['score']:.3f}  page={chunk['page_number']}{figure}")
         print(f"{chunk['text']}\n")
 
     print(f"GENERATED BY: {result['model']}\n")

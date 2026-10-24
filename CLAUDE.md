@@ -2,7 +2,7 @@
 
 # Parsing: moving from Unstructured to LlamaParse
 
-`ingest.py` still parses with local Unstructured `hi_res`. On the target annual report (175 pages: 12 wide spreads, pages 1 to 11 and 175, the rest normal pages) it had these problems, shown in `notebooks/03_annual_report_layout.ipynb`:
+`ingest.py` used to parse with local Unstructured `hi_res`. On the target annual report (175 pages: 12 wide spreads, pages 1 to 11 and 175, the rest normal pages) it had these problems, shown in `notebooks/03_annual_report_layout.ipynb`:
 
 - Many lines come out twice (as `Title`/`NarrativeText` and again as `UncategorizedText`), though the PDF holds them once.
 - A financial table's last column (pages 139 and 142) is split off into loose numbers that form junk chunks. The table HTML is complete, but its row labels are misaligned.
@@ -19,47 +19,40 @@ LlamaParse (`agentic` tier, `llama_cloud` SDK) fixed all of these on a 7-page sa
 - page 128 read correctly;
 - diagrams cropped as whole images (`images_to_save: ["layout"]`), page 8's also rewritten as a Mermaid flowchart.
 
-It is also faster: 12 seconds for 7 pages. So LlamaParse is the parser going forward. `ingest.py` has not been switched yet.
+It is also faster: 12 seconds for 7 pages. So LlamaParse is the parser going forward, and `ingest.py` now uses it.
 
 - **Cost:** 10 credits a page on `agentic`, so the whole report is about 1,750 credits.
 - **Account:** the account has 20,000 credits, given for opting into data sharing for model training. Use a separate account without that option for private documents.
 - **Unstructured's hosted API was not an option:** sign-up requires a work email.
 
-# Where we left off (October 16, 2026)
+# Where we left off (October 24, 2026)
 
-The LlamaParse ingestion is proven in notebooks. The pipeline code still runs the old Unstructured ingestion.
+`ingest.py` and `generate.py` run the LlamaParse pipeline from notebook 06, described in AGENTS.md. It was tested end to end on the attention paper (6 pages, about 60 credits): 17 text chunks and 3 figure descriptions. All 5 test questions were answered correctly with page citations, and the figure question got the figure's image. `DOCUMENT_PATH` still points at the attention paper.
+
+`requirements.txt` now has `llama-cloud` and `langchain-text-splitters`, and no longer has `unstructured[all-docs]`, which only notebooks 01 and 03 need.
 
 Notebooks so far:
 
 - `03_annual_report_layout.ipynb`: the Unstructured problems listed above.
-- `04_llamaparse_test.ipynb`: LlamaParse on 7 sample pages (4, 8, 13, 26, 128, 139, 142). It writes `notebooks/llamaparse_output/`, which git ignores: the parse result, the cropped images, the description cache and a test Chroma store. On a new machine, run 04 first (about 70 credits), then 05.
-- `05_llamaparse_ingestion.ipynb`: the new ingestion prototyped on those 7 pages. With it, the right page came first for 6 of 6 test questions.
-
-Decisions taken in notebook 05, to carry into `ingest.py`:
-
-- **Chunking:** one chunk per page. A page over `CHUNK_MAX_CHARACTERS` is split at its markdown headings, ignoring `#` lines inside fenced code blocks. A table is never split. A chunk under `CHUNK_COMBINE_UNDER_CHARACTERS` always takes the next section, so a heading is never left alone.
-- **Images:** the `layout` crops of figures and charts go to every chunk of their page. Their file names carry the page, as in `page_8_chart_1_v2.jpg`. Table crops are skipped because the HTML holds the data. Images are stored as file paths, not base64.
-- **Descriptions:** same rule as before. A chunk with a table or image is embedded by its vision-model description, with the table HTML inside the text.
-- **Metadata:** every chunk stores `page_number`.
+- `04_llamaparse_test.ipynb`: LlamaParse on 7 sample pages (4, 8, 13, 26, 128, 139, 142). It writes `notebooks/llamaparse_output/`, which git ignores: the parse result, the cropped images, the description caches and the test Chroma stores. On a new machine, run 04's parse first (about 70 credits), then 06.
+- `05_llamaparse_ingestion.ipynb`: the first prototype. Pages packed into chunks of up to 3,000 characters, page images attached to every chunk, and table chunks embedded by a description. Superseded by 06, and it no longer runs against the current `ingest.py`.
+- `06_heading_chunks_and_image_documents.ipynb`: the approach now in `ingest.py`. Each page split at its headings with a minimum size, tables embedded as raw HTML, and each figure its own document, described by `deepseek-flash` and skipped when it lies inside a larger crop. The right page came first for 6 of 6 test questions, as in 05.
 
 Next steps:
 
-1. Rewrite `ingest.py` on the notebook 05 steps:
-   - parse the whole report once with LlamaParse, with the settings from notebook 04 plus `extract_printed_page_number` and `merge_continued_tables`;
-   - save the parse result and download the images right away, because their links expire. Then re-chunking needs no new parse. A full parse is about 1,750 credits.
-2. Update `generate.py`:
-   - put the page number in the search results so answers can cite pages;
-   - load images from file paths;
-   - add page fields to `answer_question()`.
-3. Point `DOCUMENT_PATH` at the annual report. Replace `TEST_QUESTIONS` with report questions that have known answers: an income statement number, the checkmark table, the page 8 diagram, and one the report cannot answer. The employee count is in the 10-K, so it does not qualify.
-4. Re-check `MIN_RELEVANCE_SCORE` on the full report. On the 7 pages, an unanswerable question still scored 0.38.
-5. Then update `requirements.txt`: add `llama-cloud`, and drop `unstructured[all-docs]` once nothing needs it. Notebooks 01 and 03 use it.
-6. After that: the FastAPI backend, then the web UI.
+1. Point `DOCUMENT_PATH` at the annual report and run `ingest.py` (a full parse is about 1,750 credits). Replace `TEST_QUESTIONS` with report questions that have known answers: an income statement number, the checkmark table, the page 8 diagram, and one the report cannot answer. The employee count is in the 10-K, so it does not qualify.
+2. After the full parse, check:
+   - the longest chunks (sort `open_vector_store().get()["documents"]` by length). With `merge_continued_tables` on, a multi-page table becomes one chunk on its first page, which could pass the embedding model's 4,096 tokens or Groq's 7,000 input tokens a minute;
+   - how many photos are among the described figures;
+   - whether tables continued over pages land where questions about them can find them.
+3. Re-check `MIN_RELEVANCE_SCORE` on the full report. On the 7 sample pages, an unanswerable question still scored 0.375.
+4. After that: the FastAPI backend, then the web UI.
 
 Other context:
 
-- **Models:** the user plans to buy DeepSeek credits for paid models. Only some DeepSeek models take images: on OpenRouter, `deepseek-v4.1-flash` and `deepseek-v4-flash-vision-exp`. DeepSeek has no embedding model, so embeddings stay on Nemotron (OpenRouter).
-- **Free tier speed:** descriptions take 19 to 50 seconds each on the free Nemotron model, and the full report needs over 100.
+- **Models:** DeepSeek's own API (`https://api.deepseek.com`, key `DEEPSEEK_API_KEY`) is OpenAI-compatible, so `ChatOpenAI` calls it. There, `deepseek-flash` (DeepSeek-V4.1-Flash) reads text and images, and `deepseek-v4-pro` reads text only. `ingest.py` describes figures with `deepseek-flash`; it is a reasoning model, and its reasoning tokens count toward `max_tokens`. On OpenRouter, the DeepSeek models that take images are `deepseek-v4.1-flash` and `deepseek-v4-flash-vision-exp`. DeepSeek has no embedding model, so embeddings stay on Nemotron (OpenRouter).
+- **Description speed:** `deepseek-flash` took 8 to 44 seconds a figure, against 19 to 50 seconds on the free Nemotron model. Only figures are described now, not tables.
+- **Citations:** answers cite `page_number`, the page in the PDF, which every page has. The number printed on the page is kept in the chunk data (`printed_page_number`) but not given to the model; switch to it if the report's readers should look pages up by their printed numbers.
 - **API backend, to plan for:**
   - run one uvicorn worker, because Chroma's on-disk store is not safe across processes;
   - build the agent once at startup;
@@ -79,7 +72,9 @@ uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 ```
 
-If importing `multimodal_rag.ingest` fails with `libGL.so.1: cannot open shared object file`, swap OpenCV for the headless build of the same version:
+Sections 2 and 3 and the OpenCV fix below are only for notebooks 01 and 03, which use Unstructured. `ingest.py` no longer does, and `unstructured[all-docs]` is no longer in `requirements.txt`, so install it separately for those notebooks.
+
+If importing `unstructured` fails with `libGL.so.1: cannot open shared object file`, swap OpenCV for the headless build of the same version:
 
 ```bash
 uv pip uninstall --python .venv/bin/python opencv-python
@@ -139,9 +134,8 @@ readelf -d .venv/lib/python3.12/site-packages/onnxruntime/capi/libonnxruntime_pr
 
 ```bash
 .venv/bin/python -c "
-from multimodal_rag import config
-from multimodal_rag.ingest import parse_pdf
-parse_pdf(config.DOCUMENT_PATH)
+from unstructured.partition.pdf import partition_pdf
+partition_pdf(filename='attention-is-all-you-need-first6.pdf', strategy='hi_res', infer_table_structure=True)
 from unstructured_inference.models.base import get_model
 from unstructured_inference.models import tables
 print('layout:', get_model('yolox').model.get_providers())  # CUDAExecutionProvider first
@@ -153,10 +147,11 @@ onnxruntime falls back to CPU silently when a CUDA library fails to load. To see
 
 ## 4. Keys
 
-Create `.env` with `OPENROUTER_API_KEY`, `GROQ_API_KEY` and `LLAMA_CLOUD_API_KEY` (ask the user). To check them:
+Create `.env` with `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `LLAMA_CLOUD_API_KEY` and `DEEPSEEK_API_KEY` (ask the user). To check them:
 
 - OpenRouter: `GET https://openrouter.ai/api/v1/key` must return 200.
 - Groq: `GET https://api.groq.com/openai/v1/models` must return 200.
-- LlamaParse: run a small parse; `LlamaCloud().files.list()` is lazy and does not check the key.
+- DeepSeek: `GET https://api.deepseek.com/models` must return 200 and list `deepseek-flash`.
+- LlamaParse: `GET https://api.cloud.llamaindex.ai/api/v1/projects` with the key as a Bearer token must return 200. It spends no credits. (`LlamaCloud().files.list()` is lazy and does not check the key.)
 
-The LlamaParse SDK is not in `requirements.txt` yet: `uv pip install --python .venv/bin/python "llama-cloud>=2.8"`. Notebooks are run headless with `nbclient` and `nbformat`, also not in `requirements.txt`.
+Notebooks are run headless with `nbclient` and `nbformat`, which are not in `requirements.txt`. Install them into `.venv` only.

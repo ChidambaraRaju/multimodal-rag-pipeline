@@ -35,3 +35,10 @@ def open_vector_store():
         embedding_function=NemotronEmbeddings(),
         collection_metadata={"hnsw:space": "cosine"},
     )
+
+
+def save_documents(documents):
+    """Embed the documents and save them, replacing whatever was stored before."""
+    vector_store = open_vector_store()
+    vector_store.reset_collection()
+    vector_store.add_documents(documents)
