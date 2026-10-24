@@ -1,6 +1,6 @@
-"""Pick the figures among the cropped images, and describe each one with a vision model.
+"""Pick the charts among the cropped images, and describe each one with a vision model.
 
-A figure is stored by its description, which is what gets searched, and keeps the path of its image,
+A chart is stored by its description, which is what gets searched, and keeps the path of its image,
 which the answering model is shown. Descriptions are saved as they come, so a later run, or one restarted
 after a failure, only describes the figures it has not seen. Delete image_descriptions.json to describe them all again.
 """
@@ -43,30 +43,13 @@ def crop_kind(crop):
     return crop["filename"].split("_")[2]
 
 
-def area(crop):
-    return crop["bbox"]["w"] * crop["bbox"]["h"]
+def pick_charts(crops):
+    """The charts to describe, diagrams that LlamaParse files as charts included.
 
-
-def share_inside(crop, other):
-    """How much of crop's area lies inside other's box, from 0 to 1."""
-    a, b = crop["bbox"], other["bbox"]
-    width = max(0, min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"]))
-    height = max(0, min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"]))
-    return width * height / area(crop)
-
-
-def is_nested(crop, crops):
-    """True when a larger crop on the same page holds at least 90% of this one, such as one row of a diagram also cropped whole."""
-    return any(
-        crop_page(other) == crop_page(crop) and area(other) > area(crop) and share_inside(crop, other) >= 0.9
-        for other in crops
-    )
-
-
-def pick_figures(crops):
-    """The figures and charts to describe. Table crops are left out, since the table HTML is in the text, and so are nested crops."""
-    figures = [crop for crop in crops if crop_kind(crop) != "table"]
-    return [crop for crop in figures if not is_nested(crop, figures)]
+    Image crops (photos, logos, signatures, icons) add little beyond the page text, and table crops
+    are covered by the table HTML in the text, so both are left out.
+    """
+    return [crop for crop in crops if crop_kind(crop) == "chart"]
 
 
 def description_model():
@@ -98,7 +81,7 @@ def build_figure_documents(crops, pages):
     llm = description_model()
     documents = []
 
-    for crop in pick_figures(crops):
+    for crop in pick_charts(crops):
         filename = crop["filename"]
         image_path = IMAGE_DIRECTORY / filename
         page = pages[crop_page(crop)]
