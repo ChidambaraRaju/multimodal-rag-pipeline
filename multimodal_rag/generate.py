@@ -115,14 +115,22 @@ def build_agent():
         temperature=0,
         max_retries=config.MODEL_RETRY_ATTEMPTS,
     )
-    return create_agent(llm, [search_document], system_prompt=SYSTEM_PROMPT, middleware=[show_retrieved_images])
+    # The name labels each question's trace in LangSmith; without it, traces are called "LangGraph"
+    return create_agent(
+        llm,
+        [search_document],
+        system_prompt=SYSTEM_PROMPT,
+        middleware=[show_retrieved_images],
+        name="annual_report_agent",
+    )
 
 
-def answer_question(agent, question, history=()):
+def answer_question(agent, question, history=(), thread_id=None):
     """Let the agent answer one question. Returns the answer, the model, and any searches and chunks it used.
 
     history holds the earlier turns of the conversation, [{"question": ..., "answer": ...}], oldest first.
     Only their text is passed on, not their search results or figures, so later model calls stay small.
+    thread_id names the conversation, so LangSmith groups its questions into one thread.
     """
     conversation = []
     for turn in history:
@@ -130,7 +138,8 @@ def answer_question(agent, question, history=()):
         conversation.append({"role": "assistant", "content": turn["answer"]})
     conversation.append({"role": "user", "content": question})
 
-    messages = agent.invoke({"messages": conversation})["messages"]
+    run_config = {"metadata": {"thread_id": thread_id}} if thread_id else None
+    messages = agent.invoke({"messages": conversation}, config=run_config)["messages"]
     final_message = messages[-1]
 
     search_queries = []

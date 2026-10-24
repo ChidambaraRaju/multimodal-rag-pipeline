@@ -55,7 +55,7 @@ def ask(request: Question):
     if len(conversations) > config.MAX_CONVERSATIONS:
         del conversations[next(iter(conversations))]
 
-    result = answer_question(agent, request.question, history)
+    result = answer_question(agent, request.question, history, thread_id=conversation_id)
     history.append({"question": request.question, "answer": result["answer"]})
     del history[:-config.CHAT_HISTORY_TURNS]
     return {"conversation_id": conversation_id, **result}

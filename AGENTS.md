@@ -59,7 +59,7 @@ Generation is agentic. `generate.py` builds an agent with LangChain's `create_ag
 - **Speed and limits.** A question takes two to four model calls and, measured end to end with real search, 3 to 7 seconds (about 3 for one search, 6.5 for three). `ChatOpenAI` and `OpenAIEmbeddings` retry rate limits and server errors (`MODEL_RETRY_ATTEMPTS`). Each search embeds its query with Jina, about 15 tokens, and one question makes one to five searches. A free Jina key allows 100 requests a minute.
 - The system prompt names the document by `config.DOCUMENT_TITLE` ("NVIDIA's 2026 Annual Report"). It tells the model to introduce itself as an assistant for that report when asked who it is or what it can do, to answer questions about the report only from the search results, to cite the page of each result it uses, and to say "I don't have enough information to answer that question based on NVIDIA's 2026 Annual Report." when the results do not hold the answer. Citations use `page_number`, the page in the PDF.
 
-`answer_question(agent, question, history=())` takes the agent from `build_agent()`, built once, and the earlier turns of the conversation, `[{"question": ..., "answer": ...}]`, oldest first. The earlier turns go to the model as plain user and assistant messages, without their search results or figures, so later calls stay small. The system prompt tells the model to use them to understand a follow-up but to search again for any facts it needs. It returns a dict with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `id` (its id in Chroma: `page139-2` for the 2nd text chunk of page 139, as `chunking.py` names them, or a figure's image name such as `page_123_chart_1_v2`), `score`, `page_number`, `printed_page_number` (`""` when the page has none), `text`, and `image_path` (`None` for a text chunk). A chunk found by two searches is listed once, by its id. The API returns this dict, so keep it JSON-friendly.
+`answer_question(agent, question, history=(), thread_id=None)` takes the agent from `build_agent()`, built once, the earlier turns of the conversation, `[{"question": ..., "answer": ...}]`, oldest first, and optionally the conversation's id, which goes to LangSmith as `thread_id` metadata (see "Observability"). The earlier turns go to the model as plain user and assistant messages, without their search results or figures, so later calls stay small. The system prompt tells the model to use them to understand a follow-up but to search again for any facts it needs. It returns a dict with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `id` (its id in Chroma: `page139-2` for the 2nd text chunk of page 139, as `chunking.py` names them, or a figure's image name such as `page_123_chart_1_v2`), `score`, `page_number`, `printed_page_number` (`""` when the page has none), `text`, and `image_path` (`None` for a text chunk). A chunk found by two searches is listed once, by its id. The API returns this dict, so keep it JSON-friendly.
 
 Running the file alone answers the `TEST_QUESTIONS` at the top of `generate.py` and prints the searches, the retrieved chunks, the model name, and the answer. Each test question has a comment with the answer and page it should find. The first needs no search. The last is not answered anywhere in the report, to check the model refuses instead of guessing.
 
@@ -74,6 +74,15 @@ Running the file alone answers the `TEST_QUESTIONS` at the top of `generate.py` 
 - **Errors.** DeepSeek and Jina are both called through the OpenAI client, so a call that still fails after its retries raises an `openai.APIError`. The handler returns `{"error", "service", "status"}`: 429 for a rate limit, 502 for anything else.
 - **One worker only.** The conversations are in one process's memory, and Chroma's on-disk store is not safe across processes.
 - **No CORS.** The page and the API always share one origin: in development Vite's dev server forwards `/ask`, `/health` and `/parsed` to the API, and the built UI in `frontend/dist` is served by FastAPI itself at `/`. That mount comes last in `api.py`, so the API routes take precedence, and it is skipped when `frontend/dist` does not exist.
+
+## Observability
+
+LangSmith traces every LangChain run, turned on by three settings in `.env`: `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` and `LANGSMITH_PROJECT=multimodal-rag-pipeline`. The project was created automatically by the first trace. No code sets it up: the `langsmith` package comes with LangChain and reads these settings, so it is not pinned in `requirements.txt`. Set `LANGSMITH_TRACING=false` to stop tracing.
+
+- **One question is one trace**, named `annual_report_agent`, the `name` that `build_agent()` gives `create_agent` (without it, LangGraph calls every trace `LangGraph`). It holds the model calls with their messages, chart images and token counts, each `search_document` call with its query and returned chunks, and the answer. The Jina embedding calls and the FastAPI request are not traced on their own.
+- **Threads.** The API passes its `conversation_id` to `answer_question()` as `thread_id`, so the questions of one conversation are grouped in the project's Threads tab.
+- **Ingestion** is traced too while tracing is on: each chart description is a DeepSeek call through `ChatOpenAI`.
+- **Free plan:** 5,000 traces a month (tracing stops at the limit until a card is added), kept 14 days, one seat. Pydantic Logfire was the alternative considered: it sees the whole server (HTTP requests, every DeepSeek and Jina call) and keeps 30 days, but needs its own package and setup code, and reads the agent's steps through LangSmith's OpenTelemetry export anyway. LangSmith was chosen because it is made for LangChain agents and has datasets and experiments for the planned evaluation set.
 
 ## Web UI
 
@@ -96,6 +105,7 @@ Keys are read from `.env`:
 - `LLAMA_CLOUD_API_KEY`: LlamaParse parsing
 - `DEEPSEEK_API_KEY`: chart descriptions and answer generation
 - `JINA_API_KEY`: embeddings
+- `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`: LangSmith tracing (see "Observability")
 - `OPENROUTER_API_KEY`: not used since embeddings moved to Jina
 - `GROQ_API_KEY`: not used since answer generation moved to DeepSeek
 - `SARVAM_API_KEY`: not used. Sarvam's only image model, `gemma4`, needs beta access on `/v2` that this key does not have.

@@ -48,6 +48,16 @@ JINA_API_KEY=...
 - `DEEPSEEK_API_KEY` is used for chart descriptions and answer generation.
 - `JINA_API_KEY` is used for embeddings.
 
+To trace each question in [LangSmith](https://smith.langchain.com) (optional; the free plan is enough), add:
+
+```
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=multimodal-rag-pipeline
+```
+
+Each question then appears as a trace with its model calls, searches, retrieved chunks and token counts, and the questions of one API conversation are grouped in the project's Threads tab. The project is created by the first trace.
+
 ## Usage
 
 Run these commands from the project root.
@@ -116,7 +126,7 @@ result = answer_question(agent, "Your question here")
 print(result["answer"])
 ```
 
-`answer_question` returns a dictionary with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `id` (such as `page139-2`, the 2nd chunk of page 139), `score`, `page_number`, `printed_page_number` (empty when the page has none), `text`, and `image_path`. `image_path` is set only for a chart, and `text` is then its description. Pass `history=[{"question": ..., "answer": ...}]` to give it the earlier turns of a conversation.
+`answer_question` returns a dictionary with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `id` (such as `page139-2`, the 2nd chunk of page 139), `score`, `page_number`, `printed_page_number` (empty when the page has none), `text`, and `image_path`. `image_path` is set only for a chart, and `text` is then its description. Pass `history=[{"question": ..., "answer": ...}]` to give it the earlier turns of a conversation, and `thread_id` to group a conversation's traces in LangSmith.
 
 ## Configuration
 

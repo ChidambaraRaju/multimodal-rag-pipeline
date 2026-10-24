@@ -27,7 +27,7 @@ It is also faster: 12 seconds for 7 pages. So LlamaParse is the parser going for
 
 # Where we left off (October 24, 2026)
 
-**State:** ingestion, generation, the FastAPI chatbot backend and the React web UI work end to end on the full NVIDIA 2026 annual report.
+**State:** ingestion, generation, the FastAPI chatbot backend and the React web UI work end to end on the full NVIDIA 2026 annual report, and every question is traced in LangSmith.
 
 - `ingest.py` runs the LlamaParse pipeline from notebook 06, described in AGENTS.md. The report's 175 pages became 377 text chunks and 12 chart documents.
 - **Generation moved from Groq to DeepSeek** (`deepseek-flash`, the chart description model), to get away from Groq's free-tier rate limits. DeepSeek makes parallel searches, which needed three fixes in `generate.py`: the Chroma store is opened once and shared (opening it from several threads at once failed inside Chroma), `show_retrieved_images` shows the figures of every parallel search, and `answer_question()` lists a chunk found by two searches once.
@@ -56,13 +56,24 @@ Lessons:
 - A page often contributes several chunks to one answer (page 123 gave three: `page123-2`, its chart, `page123-1`). The UI shows them under one tab in reading order, which is why chunks carry their `id`.
 - To see the UI without a browser tool: `uv run --no-project --with playwright python <script>` with `p.chromium.launch(channel="msedge")` uses the installed Edge, so no browser download is needed and nothing is added to the project.
 
+## Done: observability with LangSmith
+
+The user compared LangSmith and Pydantic Logfire, both on their free plans, and chose LangSmith (the comparison is in AGENTS.md, "Observability"). It needed no new package: three settings in `.env` and the conversation id passed as `thread_id`. Tested with a question and "And the year before?" in one conversation: both traces reached the `multimodal-rag-pipeline` project and were grouped into one thread; the first had 11 runs (chain, llm, tool) and 4,669 tokens.
+
+Lessons:
+- The project need not be created by hand; the first trace creates it. The key works on the default US endpoint, so `LANGSMITH_ENDPOINT` is not set.
+- In a script, call `langchain_core.tracers.langchain.wait_for_all_tracers()` before reading traces back, and expect a few seconds before they can be queried; a just-finished trace may still have no end time.
+- `Client.list_runs()` and `get_run_url()` are deprecated in `langsmith` 0.14 (removal after January 31, 2027); use `client.runs.query()` and `client.runs.get_url()`.
+- A uvicorn server started before the `.env` change does not trace; restart it.
+- Traces were first listed as "LangGraph", LangGraph's default name for the agent's graph. `build_agent()` now passes `name="annual_report_agent"` to `create_agent`, so new traces carry that name; earlier ones keep "LangGraph".
+
 ## Next
 
 Nothing is decided. Candidates:
 - **Streaming:** show the answer as it is written, and the searches as they happen ("Searching: fiscal 2025 revenue"). It needs a streaming endpoint in FastAPI (for example server-sent events with the agent's `stream`) and a UI that reads it. Measured end to end, answers take 3 to 7 seconds (3 with one search, 6.5 with three), so this matters less than first thought, when the wait was guessed at 5 to 20 seconds.
 - **Check the Jina balance** on its dashboard: the re-embed and the tests since spent an estimated 300,000 tokens of the one-time grant.
 - **The model's own arithmetic** (see Open issues): one system prompt line.
-- **The evaluation set** of 25 to 30 questions.
+- **The evaluation set** of 25 to 30 questions, as a LangSmith dataset: run the agent over it as an experiment, score the answer and the retrieved pages, and compare experiments after each change.
 
 ## Open issues
 
@@ -217,7 +228,9 @@ onnxruntime falls back to CPU silently when a CUDA library fails to load. To see
 
 ## 4. Keys
 
-Create `.env` with `JINA_API_KEY`, `LLAMA_CLOUD_API_KEY` and `DEEPSEEK_API_KEY` (ask the user). To check them:
+Create `.env` with `JINA_API_KEY`, `LLAMA_CLOUD_API_KEY` and `DEEPSEEK_API_KEY`, and for tracing `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY` and `LANGSMITH_PROJECT=multimodal-rag-pipeline` (ask the user). To check them:
+
+- LangSmith: `GET https://api.smith.langchain.com/api/v1/sessions?limit=1` with the key in an `x-api-key` header must return 200.
 
 - Jina: `POST https://api.jina.ai/v1/embeddings` with the key as a Bearer token and `{"model": "jina-embeddings-v5-text-small", "task": "retrieval.query", "input": ["test"]}` must return 200. It spends a few tokens.
 - DeepSeek: `GET https://api.deepseek.com/models` must return 200 and list `deepseek-flash`.
