@@ -27,17 +27,75 @@ It is also faster: 12 seconds for 7 pages. So LlamaParse is the parser going for
 
 # Where we left off (October 24, 2026)
 
-`ingest.py` and `generate.py` run the LlamaParse pipeline from notebook 06, described in AGENTS.md. The full annual report is ingested: 175 pages became 377 text chunks and 12 chart documents. All 6 report test questions in `generate.py` are answered correctly with page citations: the income statement numbers, the checkmark table, the page 8 diagram (its image ranked first), the stock performance graph, and a refusal for smartphone revenue, which the report never mentions. They were run when the store still held 31 figures, but none of the 19 image documents removed since was among any question's top three results, so the results stand.
+**State:** ingestion and generation work end to end on the full NVIDIA 2026 annual report, from the command line. There is no API or UI yet.
 
-What the full run showed:
+- `ingest.py` runs the LlamaParse pipeline from notebook 06, described in AGENTS.md. The report's 175 pages became 377 text chunks and 12 chart documents.
+- **Generation moved from Groq to DeepSeek** (`deepseek-flash`, the chart description model), to get away from Groq's free-tier rate limits. DeepSeek makes parallel searches, which needed three fixes in `generate.py`: the Chroma store is opened once and shared (opening it from several threads at once failed inside Chroma), `show_retrieved_images` shows the figures of every parallel search, and `answer_question()` lists a chunk found by two searches once.
+- **Embeddings moved from Nemotron on OpenRouter to `jina-embeddings-v5-text-small`**, because free OpenRouter models allow only 50 requests a day. The store was re-embedded (7 minutes, no parse or description calls). The Nemotron store was backed up outside the repo for this session only.
+- **All 6 test questions in `generate.py` are answered correctly with DeepSeek and Jina**, with page citations: the income statement numbers, the checkmark director table, the page 8 diagram (its image ranked first), the stock performance graph, and a refusal for smartphone revenue, which the report never mentions. The expected page ranked first for 4 of the 5 document questions. For the revenue question, page 23 (the business overview, with revenue but not net income) ranked first and page 139 second, and the answer used both.
 
-- **Parse:** job `pjb-uwmj2thw29hu9hp0noial2x4p9k1`, 175 pages, 202 crops (100 tables, 90 images, 12 charts). 152 pages have a printed page number. The first run's parse succeeded but one image download dropped its connection, and the result was lost because it was saved only after the images. The job was recovered with `LlamaCloud().parsing.get(job_id, expand=[...])`, at no extra cost, and `parse.py` now saves the result first and downloads missing images on every run.
+## Next: the FastAPI backend
+
+The plan is a chatbot over this one document, ingested ahead of time. Ingestion stays a command-line step, not an endpoint.
+
+1. **Add FastAPI.** It is not installed yet. Add it with `uv add`, pin it in `requirements.txt` too, and reinstall `nbclient` and `nbformat` afterwards (see Local development). `uvicorn` is already installed as a Chroma dependency; pin it as well, since the API runs on it.
+2. **Decide with the user first:** single-turn questions, as `answer_question()` works now, or a chat that remembers earlier turns (pass the earlier messages to the agent, or use a LangGraph checkpointer with a thread id). Check the LangChain MCP docs before choosing.
+3. **Build the agent once at startup.** `answer_question()` calls `build_agent()` on every call. Let it take the agent instead.
+4. **Add `multimodal_rag/api.py`:**
+   - `POST /ask` with `{"question": ...}`, returning the `answer_question()` dict;
+   - serve the chart images, so the UI can show a retrieved chart from its `image_path` (for example a `StaticFiles` mount of `parsed/`);
+   - `GET /health`;
+   - a clear JSON error when a model or embedding call still fails after its retries (a 429, or the 402 that a third-party source says Jina returns once the key's tokens run out);
+   - CORS for the web UI's origin.
+5. **Run one uvicorn worker** (`uvicorn multimodal_rag.api:app`), because Chroma's on-disk store is not safe across processes.
+6. **Then the web UI.**
+
+## Open issues
+
+- **Jina's free tokens are a one-time grant.** Embeddings moved from Nemotron on OpenRouter, whose free models allow only 50 requests a day, to `jina-embeddings-v5-text-small`. The key's balance is on Jina's dashboard (a third-party source says new keys get 10 million tokens; older ones say 1 million). Each full re-embed spends about 280,000 tokens (an estimate at 2.6 characters a token), and each search about 15. When the grant is used up, the key needs paid tokens (a third-party source says Jina then answers 402); a full re-embed would then cost about a cent.
+- **Groq's limits no longer apply.** Its 7,000 input tokens a minute made a question that retrieves the three largest chunks (about 8,100 tokens, all financial tables) fail with a 413. With DeepSeek, `RETRIEVED_CHUNK_COUNT` could be raised if answers miss context.
+- **Removed dependencies:** `langchain-groq`, `langchain-openrouter` and `openrouter` were removed, since only the old notebooks 01 and `multi_modal_rag` import them; install them separately to run those. `GROQ_API_KEY` and `OPENROUTER_API_KEY` in `.env` are unused.
+- **Cost:** DeepSeek is paid per token. A question took 2 to 4 model calls, 400 to 5,000 input tokens and 50 to 350 output tokens each.
+- **The relevance cutoff only drops noise.** With Jina, the expected chunks scored 0.50 to 0.82, an off-topic question ("What is the capital of France?") at most 0.22, and the smartphone question, which has no answer, 0.66 at the top. So `MIN_RELEVANCE_SCORE` (0.3) still sits between the noise and the answers, but cannot detect unanswerable questions; the system prompt does that, and it worked. The director question's right chunks score lowest (0.35 to 0.56), so a cutoff above about 0.35 would start dropping them.
+- **The refusal wording varies.** For the smartphone question DeepSeek said the report "does not report a separate revenue figure for smartphone sales" instead of the system prompt's exact sentence. The meaning is right, but a UI that looks for the exact sentence would miss it.
+- **Unchecked:** whether tables continued over pages (merged onto their first page) are found by questions about them.
+- **Later:** an evaluation set of 25 to 30 report questions with their expected page and answer, to measure how often the right page is retrieved and the answer is correct.
+- **The model adds its own arithmetic.** For the stock question, Qwen called NVIDIA's return "7.2 times" the S&P 500's, which is the ratio of ending values, not of returns. DeepSeek gave the returns correctly (about 1,349% against 100%), but still adds figures the report does not state, such as "14.5x the initial investment" and "outperformed the S&P 500 by more than 7x".
+- **Small things:**
+  - `main.py` is the unused `uv init` stub.
+  - `pyproject.toml` says `requires-python >= 3.13`, while the VM setup below uses 3.12. That setup installs from `requirements.txt`, which works, but `uv sync` would refuse.
+  - The PDFs are committed to the public repo; the user may prefer linking to their source.
+
+## The ingested data exists only on this machine
+
+`parsed/2026-Annual-Report-Web/` (the parse result, 202 cropped images, 12 chart descriptions) and `vector_store/` are git-ignored. They exist only in `D:\Claude Code Projects\multimodal-rag-pipeline` on the user's Windows machine. There, `python -m multimodal_rag.ingest` spends no LlamaParse credits and makes no DeepSeek calls: it reuses the saved parse and descriptions and only re-embeds, which takes about 7 minutes and about 280,000 Jina tokens.
+
+On another machine (the VM, a deployment server), do not run ingestion straight away. With no `parsed/` folder it parses the whole report again, for about 1,750 credits. Copy `parsed/` (or `vector_store/`) over instead. Or recover the parse from its LlamaParse job, which costs nothing, if LlamaParse still keeps the job (its retention period is not published):
+
+```python
+import json
+from llama_cloud import LlamaCloud
+from multimodal_rag.parse import RESULT_PATH  # importing it also loads .env
+
+job = LlamaCloud().parsing.get("pjb-uwmj2thw29hu9hp0noial2x4p9k1", expand=["markdown", "metadata", "images_content_metadata"])
+RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
+RESULT_PATH.write_text(json.dumps(job.model_dump(mode="json"), indent=1))
+```
+
+Then `python -m multimodal_rag.ingest` downloads the images and describes the 12 charts (12 DeepSeek calls).
+
+## Local development (Windows)
+
+- Windows 11, `.venv` with Python 3.13. Packages are managed with uv (`pyproject.toml`, `uv.lock`), and `requirements.txt` is kept in step: add a package with `uv add "<package>==<version>"` and the same pin in `requirements.txt`. `unstructured[all-docs]` is no longer a dependency; only notebooks 01 and 03 need it.
+- Run modules from the project root with the venv's Python: `.venv/Scripts/python.exe -u -m multimodal_rag.ingest`. `-u` shows progress when output goes to a file.
+- Set `PYTHONUTF8=1` when output is redirected or piped. Otherwise Python writes cp1252, and printing a `✓` from the director table raises `UnicodeEncodeError`.
+- `nbclient` and `nbformat` are installed in `.venv` only, to run notebooks headless. `uv add` and `uv remove` sync `.venv` to the lock file and uninstall them, so reinstall them afterwards: `uv pip install --python .venv/Scripts/python.exe "nbclient==0.11.0" "nbformat==5.11.1"`.
+
+## Lessons from the full run
+
+- **Parse:** job `pjb-uwmj2thw29hu9hp0noial2x4p9k1`, 175 pages, 202 crops (100 tables, 90 images, 12 charts). 152 pages have a printed page number. The first run's parse succeeded, but one image download dropped its connection, and the result was lost because it was saved only after the images. The job was recovered with `LlamaCloud().parsing.get(job_id, expand=[...])` at no extra cost, and `parse.py` now saves the result first and downloads any missing images on every run.
 - **Charts only:** of the 90 `image` crops, 66 were icons about 20 to 25 points across (the skill icons on pages 35 to 41), and most of the rest were photos, logos, signatures and product shots. So only the 12 `chart` crops are described and stored. Two `image` crops were real diagrams and are dropped with the rest: page 4's DSX diagram, whose labels are all in the page text, and page 3's AI five-layer stack, whose lists of application areas and model types appear nowhere else. To keep one, add an exception for its page in `pick_charts()`.
-- **Embeddings:** the API takes at most 256 texts per request, so `store.py` now batches them.
-- **Chunk sizes:** the longest chunk is 8,650 characters (page 170), about 3,300 tokens, under the embedding model's 4,096. But the three largest chunks together come to about 8,100 tokens, above Groq's free limit of 7,000 input tokens a minute. No test question hit it, but a question that retrieves all three would get a 413 error.
-- **Relevance cutoff:** the smartphone question, which has no answer, still scored 0.59 at the top, inside the 0.53 to 0.71 range of the answerable questions. So `MIN_RELEVANCE_SCORE` cannot detect unanswerable questions; the system prompt does that, and it worked. The cutoff only drops clear noise.
-
-`requirements.txt` now has `llama-cloud` and `langchain-text-splitters`, and no longer has `unstructured[all-docs]`, which only notebooks 01 and 03 need.
+- **Embeddings:** OpenRouter's Nemotron API took at most 256 texts per request. Jina's free key takes at most 100,000 tokens a minute, so `store.py` now sends 64 documents a minute.
 
 Notebooks so far:
 
@@ -46,22 +104,12 @@ Notebooks so far:
 - `05_llamaparse_ingestion.ipynb`: the first prototype. Pages packed into chunks of up to 3,000 characters, page images attached to every chunk, and table chunks embedded by a description. Superseded by 06, and it no longer runs against the current `ingest.py`.
 - `06_heading_chunks_and_image_documents.ipynb`: the approach now in `ingest.py`. Each page split at its headings with a minimum size, tables embedded as raw HTML, and each figure its own document, described by `deepseek-flash` and skipped when it lies inside a larger crop. The right page came first for 6 of 6 test questions, as in 05. `ingest.py` has since narrowed the figures to `chart` crops only, which made the nested-crop check unnecessary.
 
-Next steps:
-
-1. The FastAPI backend (see "API backend, to plan for" below), then the web UI.
-2. Later: an evaluation set of 25 to 30 report questions with their expected page and answer, to measure how often the right page is retrieved and the answer is correct.
-3. Still unchecked: whether tables continued over pages (merged onto their first page) are found by questions about them.
-
 Other context:
 
-- **Models:** DeepSeek's own API (`https://api.deepseek.com`, key `DEEPSEEK_API_KEY`) is OpenAI-compatible, so `ChatOpenAI` calls it. There, `deepseek-flash` (DeepSeek-V4.1-Flash) reads text and images, and `deepseek-v4-pro` reads text only. `ingest.py` describes figures with `deepseek-flash`; it is a reasoning model, and its reasoning tokens count toward `max_tokens`. On OpenRouter, the DeepSeek models that take images are `deepseek-v4.1-flash` and `deepseek-v4-flash-vision-exp`. DeepSeek has no embedding model, so embeddings stay on Nemotron (OpenRouter).
-- **Description speed:** `deepseek-flash` took 8 to 44 seconds a figure, against 19 to 50 seconds on the free Nemotron model. Only figures are described now, not tables.
+- **Models:** DeepSeek's own API (`https://api.deepseek.com`, key `DEEPSEEK_API_KEY`) is OpenAI-compatible, so `ChatOpenAI` calls it. There, `deepseek-flash` (DeepSeek-V4.1-Flash) reads text and images, and `deepseek-v4-pro` reads text only. `ingest.py` describes charts with `deepseek-flash`, and `generate.py` answers with it; it is a reasoning model, and its reasoning tokens count toward `max_tokens`. On OpenRouter, the DeepSeek models that take images are `deepseek-v4.1-flash` and `deepseek-v4-flash-vision-exp`. DeepSeek has no embedding model, so embeddings are on Jina.
+- **Description speed:** `deepseek-flash` took 8 to 44 seconds a chart, against 19 to 50 seconds on the free Nemotron model. Only charts are described, not tables or other images.
 - **Citations:** answers cite `page_number`, the page in the PDF, which every page has. The number printed on the page is kept in the chunk data (`printed_page_number`) but not given to the model; switch to it if the report's readers should look pages up by their printed numbers.
-- **API backend, to plan for:**
-  - run one uvicorn worker, because Chroma's on-disk store is not safe across processes;
-  - build the agent once at startup;
-  - return clear errors for Groq 413 and 429;
-  - keep ingestion as a command-line step, not an endpoint.
+- **Working style:** the user reviews each step and makes the design decisions; propose and explain before larger changes. Keep the markdown files current after every change, and commit directly on `main`, pushing only when asked.
 
 # Setting up a new VM
 
@@ -151,10 +199,9 @@ onnxruntime falls back to CPU silently when a CUDA library fails to load. To see
 
 ## 4. Keys
 
-Create `.env` with `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `LLAMA_CLOUD_API_KEY` and `DEEPSEEK_API_KEY` (ask the user). To check them:
+Create `.env` with `JINA_API_KEY`, `LLAMA_CLOUD_API_KEY` and `DEEPSEEK_API_KEY` (ask the user). To check them:
 
-- OpenRouter: `GET https://openrouter.ai/api/v1/key` must return 200.
-- Groq: `GET https://api.groq.com/openai/v1/models` must return 200.
+- Jina: `POST https://api.jina.ai/v1/embeddings` with the key as a Bearer token and `{"model": "jina-embeddings-v5-text-small", "task": "retrieval.query", "input": ["test"]}` must return 200. It spends a few tokens.
 - DeepSeek: `GET https://api.deepseek.com/models` must return 200 and list `deepseek-flash`.
 - LlamaParse: `GET https://api.cloud.llamaindex.ai/api/v1/projects` with the key as a Bearer token must return 200. It spends no credits. (`LlamaCloud().files.list()` is lazy and does not check the key.)
 

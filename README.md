@@ -32,14 +32,12 @@ Create a `.env` file in the project root with your API keys:
 ```
 LLAMA_CLOUD_API_KEY=...
 DEEPSEEK_API_KEY=...
-OPENROUTER_API_KEY=...
-GROQ_API_KEY=...
+JINA_API_KEY=...
 ```
 
 - `LLAMA_CLOUD_API_KEY` is used for parsing (LlamaParse).
-- `DEEPSEEK_API_KEY` is used for chart descriptions.
-- `OPENROUTER_API_KEY` is used for embeddings.
-- `GROQ_API_KEY` is used for answer generation.
+- `DEEPSEEK_API_KEY` is used for chart descriptions and answer generation.
+- `JINA_API_KEY` is used for embeddings.
 
 ## Usage
 
@@ -82,14 +80,17 @@ Every setting lives in `multimodal_rag/config.py`:
 | `PARSED_DIRECTORY` | Where the parse result, the cropped images, and the chart descriptions are saved |
 | `VECTOR_STORE_DIRECTORY` | Where the Chroma vector store is saved |
 | `PARSE_TIER` | LlamaParse tier |
-| `IMAGE_DESCRIPTION_MODEL`, `DESCRIPTION_BASE_URL` | Vision model that describes charts (DeepSeek) |
-| `EMBEDDING_MODEL` | Text embedding model (OpenRouter) |
-| `GENERATION_MODEL` | Model that decides when to search and writes the answer (Groq) |
+| `DEEPSEEK_BASE_URL` | DeepSeek's API, used for chart descriptions and answers |
+| `IMAGE_DESCRIPTION_MODEL` | Vision model that describes charts (DeepSeek) |
+| `EMBEDDING_MODEL` | Text embedding model (Jina) |
+| `GENERATION_MODEL` | Model that decides when to search and writes the answer, seeing the retrieved charts (DeepSeek) |
 | `RETRIEVED_CHUNK_COUNT` | How many chunks each search returns |
 | `MIN_RELEVANCE_SCORE` | Chunks scoring below this are left out of the search results |
 | `DESCRIPTION_MAX_TOKENS` | Longest description the vision model may write |
+| `EMBEDDING_BATCH_SIZE` | Documents embedded per request during ingestion, one request a minute |
 | `MODEL_RETRY_ATTEMPTS` | Retries for a rate-limited or unavailable model call |
 | `MIN_CHUNK_CHARACTERS` | A section shorter than this joins the next one |
+
 The PDFs in this repository are sample documents used during development. Point `DOCUMENT_PATH` at any PDF to use your own.
 
 ## Project layout

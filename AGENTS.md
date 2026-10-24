@@ -43,17 +43,18 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 Models, all set in `config.py`:
 
 - Image description: `deepseek-flash` (DeepSeek-V4.1-Flash) on DeepSeek's own API, called with `ChatOpenAI` because the API is OpenAI-compatible. It is a reasoning model, and its reasoning tokens count toward `DESCRIPTION_MAX_TOKENS`. Earlier choices, all free on OpenRouter: `nvidia/nemotron-3.5-super-vl:free` (19 to 50 seconds a description), `dots-studio/dots-3-note-preview:free`, and `google/gemma-4-31b-it:free`, whose free pool stayed rate-limited.
-- Embeddings: `nvidia/nemotron-3-embed-1b:free` on OpenRouter, text only, 2048 dimensions. It needs `input_type=passage` for chunks and `input_type=query` for questions, which `NemotronEmbeddings` in `store.py` handles. The API takes at most 256 texts per request, so `store.py` sends them in batches of 256.
+- Embeddings: `jina-embeddings-v5-text-small` on Jina's API, text only, 1024 dimensions, up to 32,768 tokens a text. Jina's endpoint takes OpenAI's request format, so `JinaEmbeddings` in `store.py` calls it with LangChain's `OpenAIEmbeddings` (`check_embedding_ctx_length=False`, so the text itself is sent). It passes `task=retrieval.passage` for chunks and `task=retrieval.query` for questions. LangChain's own `JinaEmbeddings` (in `langchain-community`, which is being sunset) cannot pass a task and sends every text in one request, so it is not used. A free Jina key embeds at most 100,000 tokens a minute, so `save_documents()` sends `EMBEDDING_BATCH_SIZE` (64) documents a minute; the whole report takes about 7 minutes. Earlier: `nvidia/nemotron-3-embed-1b:free` on OpenRouter, dropped because free OpenRouter models allow only 50 requests a day.
 
 If a description call still fails after the retries, ingestion stops with the error. The descriptions written so far are saved, so running it again picks up where it stopped.
 
 ## Query path
 
-Generation is agentic. `generate.py` builds an agent with LangChain's `create_agent`: `qwen/qwen3.8-27b` on Groq with one tool, `search_document`. The model decides whether to search. Greetings and questions that are not about the document are answered without a search.
+Generation is agentic. `generate.py` builds an agent with LangChain's `create_agent`: `deepseek-flash` (DeepSeek-V4.1-Flash, the model that also describes the charts) on DeepSeek's own API, called with `ChatOpenAI`, with one tool, `search_document`. The model decides whether to search. Greetings and questions that are not about the document are answered without a search. `ChatOpenAI` drops DeepSeek's `reasoning_content`, which keeps the model's thinking out of the answer, and DeepSeek does not need it sent back between tool calls.
 
-- **`search_document(query)`** embeds the query and reads the top `RETRIEVED_CHUNK_COUNT` chunks from Chroma, each with a relevance score from 0 to 1. Chunks scoring below `MIN_RELEVANCE_SCORE` are dropped, so weak matches and their images do not push a request past Groq's free-tier limit of 7,000 input tokens per minute. If none remain, the tool tells the model nothing relevant was found. The model receives each result's text (a passage with its tables, or a figure description) under its page number. The full chunks are kept on the tool message as its artifact.
-- **Images.** Groq only accepts a plain string as a tool result, so the `show_retrieved_images` middleware adds a message right after the tool result with the image of each retrieved figure, read from its `image_path`. Do not move the images into the tool's return value.
-- **Rate limits.** Groq's free tier allows about 1,000 output tokens per minute for this model, and one question takes two or more model calls. `ModelRetryMiddleware` waits and retries on a rate limit, so several questions in a row are slow.
+- **`search_document(query)`** embeds the query and reads the top `RETRIEVED_CHUNK_COUNT` chunks from Chroma, each with a relevance score from 0 to 1. Chunks scoring below `MIN_RELEVANCE_SCORE` are dropped, so weak matches and their images do not fill the prompt. If none remain, the tool tells the model nothing relevant was found. The model receives each result's text (a passage with its tables, or a figure description) under its page number. The full chunks are kept on the tool message as its artifact.
+- **Parallel searches.** The model often makes two or more searches in one turn, and the agent runs them in parallel threads. Opening the Chroma store from several threads at the same time fails inside Chroma, so `generate.py` opens it once, when it is imported, and every search shares it.
+- **Images.** A tool result can only hold text, so the `show_retrieved_images` middleware adds a message right after the tool results with the image of each retrieved figure, read from its `image_path`. It checks every tool result since the model's last call, so figures from parallel searches all reach the model. Do not move the images into the tool's return value.
+- **Speed and limits.** A question takes two to four model calls and 1 to 6 seconds. `ChatOpenAI` and `OpenAIEmbeddings` retry rate limits and server errors (`MODEL_RETRY_ATTEMPTS`). Each search embeds its query with Jina, about 15 tokens, and one question makes one to five searches. A free Jina key allows 100 requests a minute.
 - The system prompt tells the model to answer document questions only from the search results, to cite the page of each result it uses, and to say so when the results do not hold the answer. Citations use `page_number`, the page in the PDF.
 
 `answer_question(question)` returns a dict with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `score`, `page_number`, `printed_page_number` (`""` when the page has none), `text`, and `image_path` (`None` for a text chunk). This is the function a FastAPI endpoint and UI will call later, so keep its return value JSON-friendly.
@@ -67,8 +68,9 @@ There is no API or UI yet.
 Keys are read from `.env`:
 
 - `LLAMA_CLOUD_API_KEY`: LlamaParse parsing
-- `DEEPSEEK_API_KEY`: chart descriptions
-- `OPENROUTER_API_KEY`: embeddings
-- `GROQ_API_KEY`: answer generation
+- `DEEPSEEK_API_KEY`: chart descriptions and answer generation
+- `JINA_API_KEY`: embeddings
+- `OPENROUTER_API_KEY`: not used since embeddings moved to Jina
+- `GROQ_API_KEY`: not used since answer generation moved to DeepSeek
 - `SARVAM_API_KEY`: not used. Sarvam's only image model, `gemma4`, needs beta access on `/v2` that this key does not have.
 - `PINECONE_API_KEY`: not used by the current pipeline

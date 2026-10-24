@@ -56,7 +56,7 @@ def description_model():
     """DeepSeek Flash through its OpenAI-compatible API. Rate limits and server errors are retried."""
     return ChatOpenAI(
         model=config.IMAGE_DESCRIPTION_MODEL,
-        base_url=config.DESCRIPTION_BASE_URL,
+        base_url=config.DEEPSEEK_BASE_URL,
         api_key=os.environ["DEEPSEEK_API_KEY"],
         temperature=0,
         max_tokens=config.DESCRIPTION_MAX_TOKENS,

@@ -1,6 +1,6 @@
 """All settings in one place. Change values here, nothing else needs editing.
 
-API keys are read from .env: LLAMA_CLOUD_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY and GROQ_API_KEY.
+API keys are read from .env: LLAMA_CLOUD_API_KEY, DEEPSEEK_API_KEY and JINA_API_KEY.
 """
 
 from pathlib import Path
@@ -24,10 +24,10 @@ VECTOR_STORE_DIRECTORY = PROJECT_ROOT / "vector_store" / "chroma_db"
 PARSE_TIER = "agentic"
 
 # Models
-IMAGE_DESCRIPTION_MODEL = "deepseek-flash"  # DeepSeek-V4.1-Flash on DeepSeek's own API, describes figures
-DESCRIPTION_BASE_URL = "https://api.deepseek.com"  # OpenAI-compatible, so ChatOpenAI can call it
-EMBEDDING_MODEL = "nvidia/nemotron-3-embed-1b:free"  # OpenRouter, text embeddings, 2048 dimensions
-GENERATION_MODEL = "qwen/qwen3.8-27b"  # Groq, answers the question from the retrieved chunks
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"  # DeepSeek's own API, OpenAI-compatible, so ChatOpenAI can call it
+IMAGE_DESCRIPTION_MODEL = "deepseek-flash"  # DeepSeek-V4.1-Flash, describes figures
+EMBEDDING_MODEL = "jina-embeddings-v5-text-small"  # Jina, text embeddings, 1024 dimensions
+GENERATION_MODEL = "deepseek-flash"  # DeepSeek-V4.1-Flash, reads text and images, answers from the retrieved chunks
 
 # How many chunks are retrieved for each question
 RETRIEVED_CHUNK_COUNT = 3
@@ -36,8 +36,11 @@ RETRIEVED_CHUNK_COUNT = 3
 MIN_RELEVANCE_SCORE = 0.3
 
 # Longest description the model may write, in tokens, its reasoning included.
-# The embedding model accepts at most 4096 tokens per chunk.
 DESCRIPTION_MAX_TOKENS = 3000
+
+# Documents embedded per request during ingestion. A free Jina key embeds at most 100,000 tokens a minute,
+# so one batch is sent a minute. 64 documents of the annual report come to at most about 70,000 tokens.
+EMBEDDING_BATCH_SIZE = 64
 
 # How many times to retry a model call that is rate-limited or temporarily unavailable
 MODEL_RETRY_ATTEMPTS = 8

@@ -10,13 +10,13 @@ All settings live in config.py. Run ingest.py first so the vector store exists.
 """
 
 import base64
+import os
 
-from groq import RateLimitError
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRetryMiddleware, before_model
+from langchain.agents.middleware import before_model
 from langchain.tools import tool
 from langchain_core.messages import HumanMessage
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 
 from multimodal_rag import config
 from multimodal_rag.store import open_vector_store
@@ -45,11 +45,15 @@ Cite the page of each result you use, for example (page 12).
 If the results do not contain the answer, say "I don't have enough information to answer that question based on the document."
 Reply directly, without searching, to greetings and to questions that are not about the document."""
 
+# Opened once and shared by every search. The model can run several searches at once, and opening
+# the store from several threads at the same time fails inside Chroma.
+vector_store = open_vector_store()
+
 
 @tool(response_format="content_and_artifact")
 def search_document(query: str):
     """Search the document for the passages, tables and figures most relevant to the query."""
-    results = open_vector_store().similarity_search_with_relevance_scores(query, k=config.RETRIEVED_CHUNK_COUNT)
+    results = vector_store.similarity_search_with_relevance_scores(query, k=config.RETRIEVED_CHUNK_COUNT)
     results = [(document, score) for document, score in results if score >= config.MIN_RELEVANCE_SCORE]
     if not results:
         return "No relevant passages were found in the document for this query.", []
@@ -75,17 +79,22 @@ def search_document(query: str):
 
 @before_model
 def show_retrieved_images(state, runtime):
-    """Groq only accepts text in a tool result, so the retrieved figures follow in their own message."""
-    last_message = state["messages"][-1]
-    if last_message.type != "tool" or not last_message.artifact:
-        return None
+    """A tool result can only hold text, so the retrieved figures follow in their own message.
 
-    figures = [chunk for chunk in last_message.artifact if chunk["image_path"]]
+    The model can run several searches at once, so every search result since its last call is checked.
+    """
+    figures = {}
+    for message in reversed(state["messages"]):
+        if message.type != "tool":
+            break
+        for chunk in message.artifact or []:
+            if chunk["image_path"]:
+                figures[chunk["image_path"]] = chunk  # two searches can return the same figure
     if not figures:
         return None
 
     content = []
-    for chunk in figures:
+    for chunk in figures.values():
         image = base64.b64encode((config.PROJECT_ROOT / chunk["image_path"]).read_bytes()).decode()
         content.append({"type": "text", "text": f"Figure from page {chunk['page_number']}:"})
         content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image}"}})
@@ -93,20 +102,15 @@ def show_retrieved_images(state, runtime):
 
 
 def build_agent():
-    """The generation model with the search tool attached."""
-    # reasoning_format="parsed" keeps the model's thinking out of the answer text
-    llm = ChatGroq(model=config.GENERATION_MODEL, temperature=0, reasoning_format="parsed")
-
-    # Groq's free tier allows few output tokens per minute, so a rate-limited call waits and tries again
-    wait_out_rate_limits = ModelRetryMiddleware(
-        max_retries=config.MODEL_RETRY_ATTEMPTS, retry_on=(RateLimitError,), on_failure="error"
+    """The generation model with the search tool attached. Rate limits and server errors are retried."""
+    llm = ChatOpenAI(
+        model=config.GENERATION_MODEL,
+        base_url=config.DEEPSEEK_BASE_URL,
+        api_key=os.environ["DEEPSEEK_API_KEY"],
+        temperature=0,
+        max_retries=config.MODEL_RETRY_ATTEMPTS,
     )
-    return create_agent(
-        llm,
-        [search_document],
-        system_prompt=SYSTEM_PROMPT,
-        middleware=[show_retrieved_images, wait_out_rate_limits],
-    )
+    return create_agent(llm, [search_document], system_prompt=SYSTEM_PROMPT, middleware=[show_retrieved_images])
 
 
 def answer_question(question):
@@ -116,20 +120,20 @@ def answer_question(question):
     final_message = messages[-1]
 
     search_queries = []
-    chunks = []
+    chunks = {}  # by text, since two searches can return the same chunk with different scores
     for message in messages:
         if message.type == "ai":
             search_queries += [tool_call["args"]["query"] for tool_call in message.tool_calls]
         elif message.type == "tool" and message.artifact:
-            # A second search can return a chunk the first one already found
-            chunks += [chunk for chunk in message.artifact if chunk not in chunks]
+            for chunk in message.artifact:
+                chunks.setdefault(chunk["text"], chunk)
 
     return {
         "question": question,
         "answer": final_message.text,
         "model": final_message.response_metadata["model_name"],
         "search_queries": search_queries,  # empty when the model answered without searching
-        "chunks": chunks,
+        "chunks": list(chunks.values()),
     }
 
 
