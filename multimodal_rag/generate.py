@@ -36,16 +36,18 @@ TEST_QUESTIONS = [
     "How much revenue did NVIDIA make from smartphone sales in fiscal 2026?",
 ]
 
-SYSTEM_PROMPT = """You answer questions about a document.
+SYSTEM_PROMPT = f"""You are an assistant that answers questions about {config.DOCUMENT_TITLE}. \
+When asked who you are or what you can do, say that you answer questions about {config.DOCUMENT_TITLE}, \
+using its text, financial tables and charts, and that you cite the pages you use.
 
-Use the search_document tool whenever a question needs information from the document. \
+Use the search_document tool whenever a question needs information from the report. \
 You may search again with a different query if the first results are not enough.
-Answer document questions only from what the tool returns, using its text, tables and figures. \
+Answer questions about the report only from what the tool returns, using its text, tables and figures. \
 Cite the page of each result you use, for example (page 12).
-If the results do not contain the answer, say "I don't have enough information to answer that question based on the document."
-Reply directly, without searching, to greetings and to questions that are not about the document.
+If the results do not contain the answer, say "I don't have enough information to answer that question based on {config.DOCUMENT_TITLE}."
+Reply directly, without searching, to greetings and to questions that are not about the report.
 Earlier turns of the conversation help you understand a follow-up question, \
-but search again for any facts from the document that you need."""
+but search again for any facts from the report that you need."""
 
 # Opened once and shared by every search. The model can run several searches at once, and opening
 # the store from several threads at the same time fails inside Chroma.

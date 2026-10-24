@@ -125,6 +125,7 @@ Every setting lives in `multimodal_rag/config.py`:
 | Setting | What it controls |
 |---|---|
 | `DOCUMENT_PATH` | The PDF to ingest |
+| `DOCUMENT_TITLE` | The document's name, which the chatbot uses to introduce itself and in its answers |
 | `PARSED_DIRECTORY` | Where the parse result, the cropped images, and the chart descriptions are saved |
 | `VECTOR_STORE_DIRECTORY` | Where the Chroma vector store is saved |
 | `PARSE_TIER` | LlamaParse tier |
@@ -141,7 +142,7 @@ Every setting lives in `multimodal_rag/config.py`:
 | `MODEL_RETRY_ATTEMPTS` | Retries for a rate-limited or unavailable model call |
 | `MIN_CHUNK_CHARACTERS` | A section shorter than this joins the next one |
 
-The PDFs in this repository are sample documents used during development. Point `DOCUMENT_PATH` at any PDF to use your own, and update the document's title, page count and example questions for the web UI in `frontend/src/lib/document.ts`.
+The PDFs in this repository are sample documents used during development. Point `DOCUMENT_PATH` at any PDF to use your own, set `DOCUMENT_TITLE` to its name, and update the document's title, page count and example questions for the web UI in `frontend/src/lib/document.ts`.
 
 ## Project layout
 
