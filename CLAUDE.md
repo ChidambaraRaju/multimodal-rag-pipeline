@@ -27,12 +27,12 @@ It is also faster: 12 seconds for 7 pages. So LlamaParse is the parser going for
 
 # Where we left off (October 24, 2026)
 
-`ingest.py` and `generate.py` run the LlamaParse pipeline from notebook 06, described in AGENTS.md. The full annual report is ingested: 175 pages became 377 text chunks and 31 figure documents. All 6 report test questions in `generate.py` are answered correctly with page citations: the income statement numbers, the checkmark table, the page 8 diagram (its image ranked first), the stock performance graph, and a refusal for smartphone revenue, which the report never mentions.
+`ingest.py` and `generate.py` run the LlamaParse pipeline from notebook 06, described in AGENTS.md. The full annual report is ingested: 175 pages became 377 text chunks and 12 chart documents. All 6 report test questions in `generate.py` are answered correctly with page citations: the income statement numbers, the checkmark table, the page 8 diagram (its image ranked first), the stock performance graph, and a refusal for smartphone revenue, which the report never mentions. They were run when the store still held 31 figures, but none of the 19 image documents removed since was among any question's top three results, so the results stand.
 
 What the full run showed:
 
 - **Parse:** job `pjb-uwmj2thw29hu9hp0noial2x4p9k1`, 175 pages, 202 crops (100 tables, 90 images, 12 charts). 152 pages have a printed page number. The first run's parse succeeded but one image download dropped its connection, and the result was lost because it was saved only after the images. The job was recovered with `LlamaCloud().parsing.get(job_id, expand=[...])`, at no extra cost, and `parse.py` now saves the result first and downloads missing images on every run.
-- **Figures:** 62 of the crops were icons about 20 to 25 points across (the skill icons on pages 35 to 41), now skipped by `MIN_FIGURE_SIZE`. 9 more were nested crops. 31 figures were described.
+- **Charts only:** of the 90 `image` crops, 66 were icons about 20 to 25 points across (the skill icons on pages 35 to 41), and most of the rest were photos, logos, signatures and product shots. So only the 12 `chart` crops are described and stored. Two `image` crops were real diagrams and are dropped with the rest: page 4's DSX diagram, whose labels are all in the page text, and page 3's AI five-layer stack, whose lists of application areas and model types appear nowhere else. To keep one, add an exception for its page in `pick_charts()`.
 - **Embeddings:** the API takes at most 256 texts per request, so `store.py` now batches them.
 - **Chunk sizes:** the longest chunk is 8,650 characters (page 170), about 3,300 tokens, under the embedding model's 4,096. But the three largest chunks together come to about 8,100 tokens, above Groq's free limit of 7,000 input tokens a minute. No test question hit it, but a question that retrieves all three would get a 413 error.
 - **Relevance cutoff:** the smartphone question, which has no answer, still scored 0.59 at the top, inside the 0.53 to 0.71 range of the answerable questions. So `MIN_RELEVANCE_SCORE` cannot detect unanswerable questions; the system prompt does that, and it worked. The cutoff only drops clear noise.
@@ -44,7 +44,7 @@ Notebooks so far:
 - `03_annual_report_layout.ipynb`: the Unstructured problems listed above.
 - `04_llamaparse_test.ipynb`: LlamaParse on 7 sample pages (4, 8, 13, 26, 128, 139, 142). It writes `notebooks/llamaparse_output/`, which git ignores: the parse result, the cropped images, the description caches and the test Chroma stores. On a new machine, run 04's parse first (about 70 credits), then 06.
 - `05_llamaparse_ingestion.ipynb`: the first prototype. Pages packed into chunks of up to 3,000 characters, page images attached to every chunk, and table chunks embedded by a description. Superseded by 06, and it no longer runs against the current `ingest.py`.
-- `06_heading_chunks_and_image_documents.ipynb`: the approach now in `ingest.py`. Each page split at its headings with a minimum size, tables embedded as raw HTML, and each figure its own document, described by `deepseek-flash` and skipped when it lies inside a larger crop. The right page came first for 6 of 6 test questions, as in 05.
+- `06_heading_chunks_and_image_documents.ipynb`: the approach now in `ingest.py`. Each page split at its headings with a minimum size, tables embedded as raw HTML, and each figure its own document, described by `deepseek-flash` and skipped when it lies inside a larger crop. The right page came first for 6 of 6 test questions, as in 05. `ingest.py` has since narrowed the figures to `chart` crops only, which made the nested-crop check unnecessary.
 
 Next steps:
 

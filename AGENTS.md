@@ -20,7 +20,7 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 - `multimodal_rag/ingest.py`: runs the ingestion steps in order. Run it from the project root with `python -m multimodal_rag.ingest`. Each step lives in its own module:
   - `multimodal_rag/parse.py`: LlamaParse, the saved parse result and the cropped images.
   - `multimodal_rag/chunking.py`: splitting each page into text chunks.
-  - `multimodal_rag/figures.py`: picking the figures among the crops and describing them.
+  - `multimodal_rag/figures.py`: picking the charts among the crops and describing them.
 - `multimodal_rag/generate.py`: the agent that answers questions, with document search as its tool. Run it from the project root with `python -m multimodal_rag.generate` to try the test questions.
 - `notebooks/multi_modal_rag.ipynb`: the notebook the pipeline came from.
 - `notebooks/01_docling_parse.ipynb`, `notebooks/02_native_docling_loader.ipynb`: earlier Docling and Pinecone experiments. The pipeline no longer uses either.
@@ -32,13 +32,13 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 
 1. **Parse** (`parse.py`). LlamaParse (`agentic` tier, `llama_cloud` SDK) turns each page into markdown, with tables as HTML. A table running over several pages is merged onto its first page, and each page's printed page number is read. Figures and tables are cropped as images. The result is saved in `config.PARSED_DIRECTORY` (`parsed/<document name>/`) as soon as the parse finishes, and later runs reuse it instead of parsing again. Each run then downloads the cropped images not yet on disk, with fresh links from the parse job, because image links expire. If a download fails, running ingestion again fetches the rest.
 2. **Chunk** (`chunking.py`). Each page is split on its own at its headings with LangChain's `MarkdownHeaderTextSplitter`, so every chunk belongs to exactly one page. A section shorter than `MIN_CHUNK_CHARACTERS` joins the next one, so a heading never stands alone. Tables are never cut, and there is no maximum size: a page limits it.
-3. **Describe figures** (`figures.py`). Every cropped figure and chart is sent to the image description model with its page's text, and the model returns a searchable description. Table crops are skipped, because the table HTML is in the text. So are icons (crops whose longer side is under `MIN_FIGURE_SIZE` PDF points) and any crop lying at least 90% inside a larger crop on the same page. Descriptions are saved in `image_descriptions.json` as they come; delete that file to describe again.
-4. **Store** (`store.py`). Text chunks and figure descriptions are embedded and saved in a local Chroma store. Each run replaces the stored contents.
+3. **Describe charts** (`figures.py`). Every crop LlamaParse files as a `chart` is sent to the image description model with its page's text, and the model returns a searchable description. Diagrams such as page 8's agentic AI architecture are filed as charts too. The other crops are skipped: `table` crops because the table HTML is in the text, and `image` crops because in this report they are photos, logos, signatures and icons that add little beyond the page text. Descriptions are saved in `image_descriptions.json` as they come; delete that file to describe again.
+4. **Store** (`store.py`). Text chunks and chart descriptions are embedded and saved in a local Chroma store. Each run replaces the stored contents.
 
 | Document | What gets embedded | Metadata |
 |---|---|---|
 | Text chunk | The chunk text, its tables as HTML | `page_number`, and `printed_page_number` (`""` when the page has none, since Chroma does not accept `None`) |
-| Figure | Its AI description | The same page fields, and `image_path` (relative to the project root) |
+| Chart | Its AI description | The same page fields, and `image_path` (relative to the project root) |
 
 Models, all set in `config.py`:
 
@@ -67,7 +67,7 @@ There is no API or UI yet.
 Keys are read from `.env`:
 
 - `LLAMA_CLOUD_API_KEY`: LlamaParse parsing
-- `DEEPSEEK_API_KEY`: figure descriptions
+- `DEEPSEEK_API_KEY`: chart descriptions
 - `OPENROUTER_API_KEY`: embeddings
 - `GROQ_API_KEY`: answer generation
 - `SARVAM_API_KEY`: not used. Sarvam's only image model, `gemma4`, needs beta access on `/v2` that this key does not have.
