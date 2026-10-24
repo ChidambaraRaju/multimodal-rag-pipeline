@@ -21,14 +21,19 @@ from langchain_groq import ChatGroq
 from multimodal_rag import config
 from multimodal_rag.store import open_vector_store
 
-# The first question needs no search. The last is not covered by the first 6 pages,
-# to check the model says so instead of guessing.
+# Questions about the 2026 annual report, each with the answer it should find. The first needs no search.
+# The last is not answered anywhere in the report, to check the model says so instead of guessing.
 TEST_QUESTIONS = [
     "Hi, what can you help me with?",
-    "How many attention heads does the Transformer use, and what is the dimension of each head?",
-    "In the Transformer architecture figure, what sits directly above the decoder stack?",
-    "How does the complexity per layer of self-attention compare with recurrent and convolutional layers?",
-    "Which optimizer and learning rate schedule were used to train the Transformer?",
+    # $215,938 million and $120,067 million (page 139, income statement)
+    "What were NVIDIA's revenue and net income in fiscal year 2026?",
+    # Not independent: Jen-Hsun Huang. Financial experts: Hudson, Jones, Lora, Seawell (page 26, checkmark table)
+    "Which director nominees are not independent, and which are financial experts?",
+    # The prompt, files, computer use, tools, OpenShell, memory, the LLM and sub-agents (page 8, diagram)
+    "In the agentic AI architecture diagram, what does NemoClaw connect to?",
+    # $1,448.75, against $200.33 for the S&P 500 (page 123, stock performance graph)
+    "What was $100 invested in NVIDIA stock in January 2021 worth by January 2026, compared with the S&P 500?",
+    "How much revenue did NVIDIA make from smartphone sales in fiscal 2026?",
 ]
 
 SYSTEM_PROMPT = """You answer questions about a document.

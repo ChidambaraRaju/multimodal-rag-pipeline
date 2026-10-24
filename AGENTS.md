@@ -1,6 +1,6 @@
 # Multimodal RAG
 
-Single-document RAG over a PDF with text, tables, and images. The target document is `2026-Annual-Report-Web.pdf`. Testing currently runs on `attention-is-all-you-need-first6.pdf`, the first 6 pages of the attention paper. Scale-out (multiple companies, periods, and reports) is out of scope until one document works end to end.
+Single-document RAG over a PDF with text, tables, and images. The document is `2026-Annual-Report-Web.pdf`, NVIDIA's 2026 annual report (175 pages), and it is fully ingested. `attention-is-all-you-need-first6.pdf`, the first 6 pages of the attention paper, was the earlier test document. Scale-out (multiple companies, periods, and reports) is out of scope until one document works end to end.
 
 Keep the code simple and easy to read. This is the priority. Prefer one plain function per step over abstractions, and do not add options nobody asked for.
 
@@ -30,9 +30,9 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 
 `ingest.py` runs four steps in order:
 
-1. **Parse** (`parse.py`). LlamaParse (`agentic` tier, `llama_cloud` SDK) turns each page into markdown, with tables as HTML. A table running over several pages is merged onto its first page, and each page's printed page number is read. Figures and tables are cropped as images, which are downloaded right away because their links expire. The result and the images are saved in `config.PARSED_DIRECTORY` (`parsed/<document name>/`), and later runs reuse them instead of parsing again.
+1. **Parse** (`parse.py`). LlamaParse (`agentic` tier, `llama_cloud` SDK) turns each page into markdown, with tables as HTML. A table running over several pages is merged onto its first page, and each page's printed page number is read. Figures and tables are cropped as images. The result is saved in `config.PARSED_DIRECTORY` (`parsed/<document name>/`) as soon as the parse finishes, and later runs reuse it instead of parsing again. Each run then downloads the cropped images not yet on disk, with fresh links from the parse job, because image links expire. If a download fails, running ingestion again fetches the rest.
 2. **Chunk** (`chunking.py`). Each page is split on its own at its headings with LangChain's `MarkdownHeaderTextSplitter`, so every chunk belongs to exactly one page. A section shorter than `MIN_CHUNK_CHARACTERS` joins the next one, so a heading never stands alone. Tables are never cut, and there is no maximum size: a page limits it.
-3. **Describe figures** (`figures.py`). Every cropped figure and chart is sent to the image description model with its page's text, and the model returns a searchable description. Table crops are skipped, because the table HTML is in the text. So is a crop lying at least 90% inside a larger crop on the same page. Descriptions are saved in `image_descriptions.json` as they come; delete that file to describe again.
+3. **Describe figures** (`figures.py`). Every cropped figure and chart is sent to the image description model with its page's text, and the model returns a searchable description. Table crops are skipped, because the table HTML is in the text. So are icons (crops whose longer side is under `MIN_FIGURE_SIZE` PDF points) and any crop lying at least 90% inside a larger crop on the same page. Descriptions are saved in `image_descriptions.json` as they come; delete that file to describe again.
 4. **Store** (`store.py`). Text chunks and figure descriptions are embedded and saved in a local Chroma store. Each run replaces the stored contents.
 
 | Document | What gets embedded | Metadata |
@@ -43,7 +43,7 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 Models, all set in `config.py`:
 
 - Image description: `deepseek-flash` (DeepSeek-V4.1-Flash) on DeepSeek's own API, called with `ChatOpenAI` because the API is OpenAI-compatible. It is a reasoning model, and its reasoning tokens count toward `DESCRIPTION_MAX_TOKENS`. Earlier choices, all free on OpenRouter: `nvidia/nemotron-3.5-super-vl:free` (19 to 50 seconds a description), `dots-studio/dots-3-note-preview:free`, and `google/gemma-4-31b-it:free`, whose free pool stayed rate-limited.
-- Embeddings: `nvidia/nemotron-3-embed-1b:free` on OpenRouter, text only, 2048 dimensions. It needs `input_type=passage` for chunks and `input_type=query` for questions, which `NemotronEmbeddings` in `store.py` handles.
+- Embeddings: `nvidia/nemotron-3-embed-1b:free` on OpenRouter, text only, 2048 dimensions. It needs `input_type=passage` for chunks and `input_type=query` for questions, which `NemotronEmbeddings` in `store.py` handles. The API takes at most 256 texts per request, so `store.py` sends them in batches of 256.
 
 If a description call still fails after the retries, ingestion stops with the error. The descriptions written so far are saved, so running it again picks up where it stopped.
 
@@ -58,7 +58,7 @@ Generation is agentic. `generate.py` builds an agent with LangChain's `create_ag
 
 `answer_question(question)` returns a dict with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `score`, `page_number`, `printed_page_number` (`""` when the page has none), `text`, and `image_path` (`None` for a text chunk). This is the function a FastAPI endpoint and UI will call later, so keep its return value JSON-friendly.
 
-Running the file alone answers the `TEST_QUESTIONS` at the top of `generate.py` and prints the searches, the retrieved chunks, the model name, and the answer. The first test question needs no search. The last is not covered by the first 6 pages, to check the model refuses instead of guessing.
+Running the file alone answers the `TEST_QUESTIONS` at the top of `generate.py` and prints the searches, the retrieved chunks, the model name, and the answer. Each test question has a comment with the answer and page it should find. The first needs no search. The last is not answered anywhere in the report, to check the model refuses instead of guessing.
 
 There is no API or UI yet.
 

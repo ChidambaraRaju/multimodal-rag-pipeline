@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 
 # Document to ingest
-DOCUMENT_PATH = PROJECT_ROOT / "attention-is-all-you-need-first6.pdf"
+DOCUMENT_PATH = PROJECT_ROOT / "2026-Annual-Report-Web.pdf"
 
 # Where the LlamaParse result, its cropped images and the figure descriptions are saved, one folder per document.
 # Ingestion reuses them, so the document is parsed only once. Delete the folder to parse again.

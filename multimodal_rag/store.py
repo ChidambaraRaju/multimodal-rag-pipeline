@@ -18,6 +18,7 @@ class NemotronEmbeddings(Embeddings):
             api_key=os.environ["OPENROUTER_API_KEY"],
             base_url="https://openrouter.ai/api/v1",
             check_embedding_ctx_length=False,
+            chunk_size=256,  # texts per request; the embedding API accepts at most 256
             model_kwargs={"extra_body": {"input_type": input_type}},
         )
 

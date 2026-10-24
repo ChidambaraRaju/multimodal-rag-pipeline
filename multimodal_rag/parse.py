@@ -18,10 +18,10 @@ IMAGE_DIRECTORY = config.PARSED_DIRECTORY / "images"
 
 
 def parse_pdf(pdf_path):
-    """Parse the PDF, download its cropped images and save the result.
+    """Parse the PDF and save the result right away, since the parse is what costs credits.
 
     A table running over several pages is merged onto its first page, and the number printed
-    on each page is read. The image links expire, so the images are downloaded right away.
+    on each page is read.
     """
     client = LlamaCloud()  # reads LLAMA_CLOUD_API_KEY from the environment
     file = client.files.create(file=str(pdf_path), purpose="parse")
@@ -36,14 +36,30 @@ def parse_pdf(pdf_path):
         },
         expand=["markdown", "metadata", "images_content_metadata"],
     ).model_dump(mode="json")
-
-    IMAGE_DIRECTORY.mkdir(parents=True, exist_ok=True)
-    for image in result["images_content_metadata"]["images"]:
-        response = httpx.get(image["presigned_url"], timeout=60)
-        response.raise_for_status()
-        (IMAGE_DIRECTORY / image["filename"]).write_bytes(response.content)
+    RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
     RESULT_PATH.write_text(json.dumps(result, indent=1))
     return result
+
+
+def download_images(result):
+    """Download the cropped images that are not on disk yet.
+
+    Image links expire, so fresh ones are fetched from the parse job. If a download fails,
+    running ingestion again downloads the rest.
+    """
+    missing = [image["filename"] for image in result["images_content_metadata"]["images"]
+               if not (IMAGE_DIRECTORY / image["filename"]).exists()]
+    if not missing:
+        return
+
+    job = LlamaCloud().parsing.get(result["job"]["id"], expand=["images_content_metadata"]).model_dump(mode="json")
+    IMAGE_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading {len(missing)} images")
+    for image in job["images_content_metadata"]["images"]:
+        if image["filename"] in missing:
+            response = httpx.get(image["presigned_url"], timeout=60)
+            response.raise_for_status()
+            (IMAGE_DIRECTORY / image["filename"]).write_bytes(response.content)
 
 
 def read_pages(result):
@@ -67,4 +83,5 @@ def load_parsed_pdf(pdf_path):
     else:
         print(f"Parsing {pdf_path.name} with LlamaParse")
         result = parse_pdf(pdf_path)
+    download_images(result)
     return read_pages(result), result["images_content_metadata"]["images"]

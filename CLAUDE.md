@@ -27,7 +27,15 @@ It is also faster: 12 seconds for 7 pages. So LlamaParse is the parser going for
 
 # Where we left off (October 24, 2026)
 
-`ingest.py` and `generate.py` run the LlamaParse pipeline from notebook 06, described in AGENTS.md. It was tested end to end on the attention paper (6 pages, about 60 credits): 17 text chunks and 3 figure descriptions. All 5 test questions were answered correctly with page citations, and the figure question got the figure's image. `DOCUMENT_PATH` still points at the attention paper.
+`ingest.py` and `generate.py` run the LlamaParse pipeline from notebook 06, described in AGENTS.md. The full annual report is ingested: 175 pages became 377 text chunks and 31 figure documents. All 6 report test questions in `generate.py` are answered correctly with page citations: the income statement numbers, the checkmark table, the page 8 diagram (its image ranked first), the stock performance graph, and a refusal for smartphone revenue, which the report never mentions.
+
+What the full run showed:
+
+- **Parse:** job `pjb-uwmj2thw29hu9hp0noial2x4p9k1`, 175 pages, 202 crops (100 tables, 90 images, 12 charts). 152 pages have a printed page number. The first run's parse succeeded but one image download dropped its connection, and the result was lost because it was saved only after the images. The job was recovered with `LlamaCloud().parsing.get(job_id, expand=[...])`, at no extra cost, and `parse.py` now saves the result first and downloads missing images on every run.
+- **Figures:** 62 of the crops were icons about 20 to 25 points across (the skill icons on pages 35 to 41), now skipped by `MIN_FIGURE_SIZE`. 9 more were nested crops. 31 figures were described.
+- **Embeddings:** the API takes at most 256 texts per request, so `store.py` now batches them.
+- **Chunk sizes:** the longest chunk is 8,650 characters (page 170), about 3,300 tokens, under the embedding model's 4,096. But the three largest chunks together come to about 8,100 tokens, above Groq's free limit of 7,000 input tokens a minute. No test question hit it, but a question that retrieves all three would get a 413 error.
+- **Relevance cutoff:** the smartphone question, which has no answer, still scored 0.59 at the top, inside the 0.53 to 0.71 range of the answerable questions. So `MIN_RELEVANCE_SCORE` cannot detect unanswerable questions; the system prompt does that, and it worked. The cutoff only drops clear noise.
 
 `requirements.txt` now has `llama-cloud` and `langchain-text-splitters`, and no longer has `unstructured[all-docs]`, which only notebooks 01 and 03 need.
 
@@ -40,13 +48,9 @@ Notebooks so far:
 
 Next steps:
 
-1. Point `DOCUMENT_PATH` at the annual report and run `ingest.py` (a full parse is about 1,750 credits). Replace `TEST_QUESTIONS` with report questions that have known answers: an income statement number, the checkmark table, the page 8 diagram, and one the report cannot answer. The employee count is in the 10-K, so it does not qualify.
-2. After the full parse, check:
-   - the longest chunks (sort `open_vector_store().get()["documents"]` by length). With `merge_continued_tables` on, a multi-page table becomes one chunk on its first page, which could pass the embedding model's 4,096 tokens or Groq's 7,000 input tokens a minute;
-   - how many photos are among the described figures;
-   - whether tables continued over pages land where questions about them can find them.
-3. Re-check `MIN_RELEVANCE_SCORE` on the full report. On the 7 sample pages, an unanswerable question still scored 0.375.
-4. After that: the FastAPI backend, then the web UI.
+1. The FastAPI backend (see "API backend, to plan for" below), then the web UI.
+2. Later: an evaluation set of 25 to 30 report questions with their expected page and answer, to measure how often the right page is retrieved and the answer is correct.
+3. Still unchecked: whether tables continued over pages (merged onto their first page) are found by questions about them.
 
 Other context:
 

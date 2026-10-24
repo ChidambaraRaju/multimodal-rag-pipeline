@@ -90,6 +90,7 @@ Every setting lives in `multimodal_rag/config.py`:
 | `DESCRIPTION_MAX_TOKENS` | Longest description the vision model may write |
 | `MODEL_RETRY_ATTEMPTS` | Retries for a rate-limited or unavailable model call |
 | `MIN_CHUNK_CHARACTERS` | A section shorter than this joins the next one |
+| `MIN_FIGURE_SIZE` | A cropped figure smaller than this (in PDF points) is an icon and is not described |
 
 The PDFs in this repository are sample documents used during development. Point `DOCUMENT_PATH` at any PDF to use your own.
 
@@ -110,4 +111,4 @@ parsed/         saved parse results, figure images and descriptions (not in git)
 
 ## Status
 
-Ingestion and generation work from the command line for a single document, tested on the first 6 pages of the attention paper. Planned next: ingest the full annual report, then a FastAPI endpoint and a web UI.
+Ingestion and generation work from the command line for a single document: NVIDIA's 2026 annual report (175 pages), which becomes 377 text chunks and 31 figure descriptions. All 6 test questions in `generate.py` are answered correctly. Planned next: a FastAPI backend and a web UI.
