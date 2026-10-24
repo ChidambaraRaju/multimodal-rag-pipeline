@@ -15,13 +15,15 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 
 ## Layout
 
-- `multimodal_rag/config.py`: every setting (document path, parse and vector store folders, LlamaParse tier, model names, token limit, retry count, minimum chunk size, number of retrieved chunks). Change settings here and nowhere else. It also loads `.env`.
+- `multimodal_rag/config.py`: every setting (document path, parse and vector store folders, LlamaParse tier, model names, token limit, embedding batch size, retry count, minimum chunk size, number of retrieved chunks, chat history turns, conversation limit). Change settings here and nowhere else. It also loads `.env`. The web UI's document title and example questions are the one exception: they live in `frontend/src/lib/document.ts`.
 - `multimodal_rag/store.py`: the Chroma vector store and the embedding model, shared by ingestion and generation, and `save_documents()`, which replaces the stored contents.
 - `multimodal_rag/ingest.py`: runs the ingestion steps in order. Run it from the project root with `python -m multimodal_rag.ingest`. Each step lives in its own module:
   - `multimodal_rag/parse.py`: LlamaParse, the saved parse result and the cropped images.
   - `multimodal_rag/chunking.py`: splitting each page into text chunks.
   - `multimodal_rag/figures.py`: picking the charts among the crops and describing them.
 - `multimodal_rag/generate.py`: the agent that answers questions, with document search as its tool. Run it from the project root with `python -m multimodal_rag.generate` to try the test questions.
+- `multimodal_rag/api.py`: the FastAPI chatbot backend, which keeps each conversation's recent turns in memory. Run it from the project root with one worker: `uvicorn multimodal_rag.api:app`.
+- `frontend/`: the web UI, a React app built with Vite, TypeScript, Tailwind CSS v4 and shadcn/ui. See "Web UI" below.
 - `notebooks/multi_modal_rag.ipynb`: the notebook the pipeline came from.
 - `notebooks/01_docling_parse.ipynb`, `notebooks/02_native_docling_loader.ipynb`: earlier Docling and Pinecone experiments. The pipeline no longer uses either.
 - `notebooks/03_annual_report_layout.ipynb` to `notebooks/06_heading_chunks_and_image_documents.ipynb`: the move from Unstructured to LlamaParse. Notebook 06 is the approach `ingest.py` now follows. Notebooks 01, 03 and 05 no longer run against the current code or requirements.
@@ -54,14 +56,38 @@ Generation is agentic. `generate.py` builds an agent with LangChain's `create_ag
 - **`search_document(query)`** embeds the query and reads the top `RETRIEVED_CHUNK_COUNT` chunks from Chroma, each with a relevance score from 0 to 1. Chunks scoring below `MIN_RELEVANCE_SCORE` are dropped, so weak matches and their images do not fill the prompt. If none remain, the tool tells the model nothing relevant was found. The model receives each result's text (a passage with its tables, or a figure description) under its page number. The full chunks are kept on the tool message as its artifact.
 - **Parallel searches.** The model often makes two or more searches in one turn, and the agent runs them in parallel threads. Opening the Chroma store from several threads at the same time fails inside Chroma, so `generate.py` opens it once, when it is imported, and every search shares it.
 - **Images.** A tool result can only hold text, so the `show_retrieved_images` middleware adds a message right after the tool results with the image of each retrieved figure, read from its `image_path`. It checks every tool result since the model's last call, so figures from parallel searches all reach the model. Do not move the images into the tool's return value.
-- **Speed and limits.** A question takes two to four model calls and 1 to 6 seconds. `ChatOpenAI` and `OpenAIEmbeddings` retry rate limits and server errors (`MODEL_RETRY_ATTEMPTS`). Each search embeds its query with Jina, about 15 tokens, and one question makes one to five searches. A free Jina key allows 100 requests a minute.
+- **Speed and limits.** A question takes two to four model calls and, measured end to end with real search, 3 to 7 seconds (about 3 for one search, 6.5 for three). `ChatOpenAI` and `OpenAIEmbeddings` retry rate limits and server errors (`MODEL_RETRY_ATTEMPTS`). Each search embeds its query with Jina, about 15 tokens, and one question makes one to five searches. A free Jina key allows 100 requests a minute.
 - The system prompt tells the model to answer document questions only from the search results, to cite the page of each result it uses, and to say so when the results do not hold the answer. Citations use `page_number`, the page in the PDF.
 
-`answer_question(question)` returns a dict with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `score`, `page_number`, `printed_page_number` (`""` when the page has none), `text`, and `image_path` (`None` for a text chunk). This is the function a FastAPI endpoint and UI will call later, so keep its return value JSON-friendly.
+`answer_question(agent, question, history=())` takes the agent from `build_agent()`, built once, and the earlier turns of the conversation, `[{"question": ..., "answer": ...}]`, oldest first. The earlier turns go to the model as plain user and assistant messages, without their search results or figures, so later calls stay small. The system prompt tells the model to use them to understand a follow-up but to search again for any facts it needs. It returns a dict with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `score`, `page_number`, `printed_page_number` (`""` when the page has none), `text`, and `image_path` (`None` for a text chunk). The API returns this dict, so keep it JSON-friendly.
 
 Running the file alone answers the `TEST_QUESTIONS` at the top of `generate.py` and prints the searches, the retrieved chunks, the model name, and the answer. Each test question has a comment with the answer and page it should find. The first needs no search. The last is not answered anywhere in the report, to check the model refuses instead of guessing.
 
-There is no API or UI yet.
+## API
+
+`api.py` is a FastAPI app over the query path. The agent is built once, at startup.
+
+- **`POST /ask`** takes `{"question": ..., "conversation_id": ...}` and returns the `answer_question()` dict with the `conversation_id` added. The first question of a conversation leaves the id out, and the server creates one (a UUID). The UI keeps only that id, not the history, so a page reload starts a new conversation. A missing or unknown id, for example after a server restart, starts a new conversation instead of failing.
+- **Conversations** live in a plain dict in memory, not a LangGraph checkpointer: conversation id → its last `CHAT_HISTORY_TURNS` (3) turns, question and answer text only. A conversation moves to the end of the dict when used, and past `MAX_CONVERSATIONS` (1,000) the least recently used one is dropped. They are lost when the server restarts.
+- **Images.** The cropped images are served at their `image_path`, so the UI shows a chart at `/` + its `image_path`. Only the images folder is served, not the parse result.
+- **`GET /health`** returns `{"status": "ok"}`.
+- **Errors.** DeepSeek and Jina are both called through the OpenAI client, so a call that still fails after its retries raises an `openai.APIError`. The handler returns `{"error", "service", "status"}`: 429 for a rate limit, 502 for anything else.
+- **One worker only.** The conversations are in one process's memory, and Chroma's on-disk store is not safe across processes.
+- **No CORS.** The page and the API always share one origin: in development Vite's dev server forwards `/ask`, `/health` and `/parsed` to the API, and the built UI in `frontend/dist` is served by FastAPI itself at `/`. That mount comes last in `api.py`, so the API routes take precedence, and it is skipped when `frontend/dist` does not exist.
+
+## Web UI
+
+`frontend/` was created with `shadcn init -t vite` (preset `nova`, Radix components) and keeps the shadcn layout: its components in `src/components/ui/`, the `cn` class helper from `src/lib/utils.ts`, and the theme in `src/index.css`. Add shadcn components with `npx shadcn@latest add <name>` from `frontend/`. Run `npm run dev` there while working (http://localhost:5173), and `npm run build` for the version FastAPI serves; `npm run lint` checks the code.
+
+- `src/App.tsx`: the conversation. It keeps the turns on screen and only the `conversation_id` in a ref, never in localStorage, so a reload or "New chat" starts a new conversation. "Ask again" resends a failed question.
+- `src/lib/api.ts`: `ask()` calls `POST /ask` and turns a 429, a 502 or an unreachable server into a message for the person asking, naming DeepSeek or Jina from the error's `service`.
+- `src/lib/document.ts`: the document's title, page count and the example questions on the empty screen. Update them whenever `config.DOCUMENT_PATH` changes.
+- `src/components/exchange.tsx`: one question with its loading state, error or answer.
+- `src/components/markdown.tsx`: renders answers and page excerpts with `react-markdown`, `remark-gfm` for tables, and `rehype-raw` then `rehype-sanitize`, because excerpts hold LlamaParse's HTML tables. `linkCitations()` turns "page 139" and "pages 23, 167" in an answer into citation marks; a mark whose page was retrieved opens that page's excerpt.
+- `src/components/sources.tsx`: under each answer, the retrieved figures (opening larger in a dialog), a tab per retrieved page, and the open page's excerpt with its printed page number and relevance score.
+- `src/components/composer.tsx`: the question box. Enter asks, Shift+Enter starts a new line.
+
+Design, chosen for reading a report and checking its evidence: cool paper white (`#f5f6f2`), blue-slate ink (`#1c2534`), ink blue for actions (`#2c47c5`), and a highlighter yellow (`--marker`, `#f3df5a`) used only for page citations, page tabs and the loading sweep. Answers are set in Source Serif 4 (the report's voice), questions and controls in Public Sans (the asker's voice), and tables use tabular figures so columns of numbers line up. The page is a single left-aligned reading column, laid out as a transcript rather than chat bubbles. There is no dark mode.
 
 ## Environment
 

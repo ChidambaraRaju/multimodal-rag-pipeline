@@ -17,6 +17,8 @@ A retrieval-augmented generation pipeline for PDF documents that contain text, t
 2. **Search.** Otherwise the model calls the search tool, which fetches the most relevant chunks and charts. It can search again with a different query if the first results fall short.
 3. **Answer.** The model answers from the text, tables, and chart images it found, citing their pages. If the document does not hold the answer, it says so.
 
+**Chat.** A FastAPI backend keeps the last 3 questions and answers of each conversation in memory, so follow-up questions such as "And the year before?" work. A React web UI shows each answer with its cited pages, the retrieved figures, and the retrieved text of each page.
+
 ## Setup
 
 Python 3.12 or 3.13. Install the Python packages:
@@ -25,6 +27,13 @@ Python 3.12 or 3.13. Install the Python packages:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+The web UI needs Node.js (developed with Node 22). Install its packages:
+
+```bash
+cd frontend
+npm install
 ```
 
 Create a `.env` file in the project root with your API keys:
@@ -41,7 +50,7 @@ JINA_API_KEY=...
 
 ## Usage
 
-Run both commands from the project root.
+Run these commands from the project root.
 
 Ingest the document set in `config.py`:
 
@@ -59,16 +68,55 @@ python -m multimodal_rag.generate
 
 The test questions are the `TEST_QUESTIONS` list at the top of `multimodal_rag/generate.py`.
 
+Start the chatbot API, with a single worker:
+
+```bash
+uvicorn multimodal_rag.api:app
+```
+
+Then ask a question, and send the returned `conversation_id` with a follow-up so the model sees the earlier turns:
+
+```bash
+curl -X POST http://127.0.0.1:8000/ask -H "Content-Type: application/json" \
+  -d '{"question": "What were NVIDIA'"'"'s revenue and net income in fiscal year 2026?"}'
+
+curl -X POST http://127.0.0.1:8000/ask -H "Content-Type: application/json" \
+  -d '{"question": "And the year before?", "conversation_id": "<id from the first answer>"}'
+```
+
+The server keeps the last 3 questions and answers of each conversation in memory, so conversations are lost when it restarts. A chart from the answer is served at `/` + its `image_path`, and `GET /health` reports that the server is up. The interactive API docs are at http://127.0.0.1:8000/docs.
+
+### Web UI
+
+The UI in `frontend/` is a React app (Vite, TypeScript, Tailwind CSS and shadcn/ui). It shows each answer with its page citations, the retrieved figures, and the retrieved text of each cited page.
+
+While working on it, run the API as above and, in a second terminal, the Vite dev server, which reloads the page on every change:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open http://localhost:5173. The dev server forwards `/ask`, `/health` and the chart images to the API on port 8000.
+
+To use the UI without the dev server, build it, and build it again after changing it. The API then serves it at http://127.0.0.1:8000/:
+
+```bash
+cd frontend
+npm run build
+```
+
 To use the pipeline from your own code:
 
 ```python
-from multimodal_rag.generate import answer_question
+from multimodal_rag.generate import answer_question, build_agent
 
-result = answer_question("Your question here")
+agent = build_agent()
+result = answer_question(agent, "Your question here")
 print(result["answer"])
 ```
 
-`answer_question` returns a dictionary with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `score`, `page_number`, `printed_page_number` (empty when the page has none), `text`, and `image_path`. `image_path` is set only for a chart, and `text` is then its description.
+`answer_question` returns a dictionary with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `score`, `page_number`, `printed_page_number` (empty when the page has none), `text`, and `image_path`. `image_path` is set only for a chart, and `text` is then its description. Pass `history=[{"question": ..., "answer": ...}]` to give it the earlier turns of a conversation.
 
 ## Configuration
 
@@ -86,12 +134,14 @@ Every setting lives in `multimodal_rag/config.py`:
 | `GENERATION_MODEL` | Model that decides when to search and writes the answer, seeing the retrieved charts (DeepSeek) |
 | `RETRIEVED_CHUNK_COUNT` | How many chunks each search returns |
 | `MIN_RELEVANCE_SCORE` | Chunks scoring below this are left out of the search results |
+| `CHAT_HISTORY_TURNS` | How many earlier turns of a conversation the model sees |
+| `MAX_CONVERSATIONS` | How many conversations the API keeps in memory |
 | `DESCRIPTION_MAX_TOKENS` | Longest description the vision model may write |
 | `EMBEDDING_BATCH_SIZE` | Documents embedded per request during ingestion, one request a minute |
 | `MODEL_RETRY_ATTEMPTS` | Retries for a rate-limited or unavailable model call |
 | `MIN_CHUNK_CHARACTERS` | A section shorter than this joins the next one |
 
-The PDFs in this repository are sample documents used during development. Point `DOCUMENT_PATH` at any PDF to use your own.
+The PDFs in this repository are sample documents used during development. Point `DOCUMENT_PATH` at any PDF to use your own, and update the document's title, page count and example questions for the web UI in `frontend/src/lib/document.ts`.
 
 ## Project layout
 
@@ -104,10 +154,16 @@ multimodal_rag/
   chunking.py   2. split each page into text chunks at its headings
   figures.py    3. pick the charts among the cropped images and describe them
   generate.py   agent that answers questions, with document search as its tool
+  api.py        FastAPI chatbot backend, keeps each conversation's recent turns in memory
+frontend/       web UI: React, Vite, TypeScript, Tailwind CSS and shadcn/ui
+  src/App.tsx         the conversation: questions, answers, new chat
+  src/components/     the question box, each exchange, its sources and figures, markdown with page citations
+  src/lib/api.ts      the call to POST /ask, and error messages
+  src/lib/document.ts the document's title, page count and example questions
 notebooks/      experiments the pipeline grew out of
 parsed/         saved parse results, cropped images and chart descriptions (not in git)
 ```
 
 ## Status
 
-Ingestion and generation work from the command line for a single document: NVIDIA's 2026 annual report (175 pages), which becomes 377 text chunks and 12 chart descriptions. All 6 test questions in `generate.py` are answered correctly. Planned next: a FastAPI backend and a web UI.
+Ingestion, generation and the chatbot API work for a single document: NVIDIA's 2026 annual report (175 pages), which becomes 377 text chunks and 12 chart descriptions. All 6 test questions in `generate.py` are answered correctly, and the API answers follow-up questions within a conversation. The web UI works in development and as a build served by the API.

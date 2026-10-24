@@ -1,0 +1,200 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/public-sans";
+@import "@fontsource-variable/source-serif-4";
+
+@theme inline {
+  /* Public Sans for the person asking and the controls, Source Serif 4 for the report's answers */
+  --font-sans: "Public Sans Variable", system-ui, sans-serif;
+  --font-serif: "Source Serif 4 Variable", Georgia, serif;
+  --font-heading: var(--font-serif);
+  --color-marker: var(--marker);
+  --color-marker-strong: var(--marker-strong);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+/* Paper, ink, and a highlighter for the pages an answer comes from */
+:root {
+  --background: #f5f6f2; /* paper */
+  --foreground: #1c2534; /* ink */
+  --card: #ffffff;
+  --card-foreground: #1c2534;
+  --popover: #ffffff;
+  --popover-foreground: #1c2534;
+  --primary: #2c47c5; /* ink blue, for actions */
+  --primary-foreground: #ffffff;
+  --secondary: #e9ebe6;
+  --secondary-foreground: #1c2534;
+  --muted: #e9ebe6;
+  --muted-foreground: #5c6575;
+  --accent: #e9ebe6;
+  --accent-foreground: #1c2534;
+  --destructive: #b0382c;
+  --border: #d8dce1;
+  --input: #d8dce1;
+  --ring: #2c47c5;
+  --marker: #f3df5a; /* highlighter */
+  --marker-strong: #e8cc2c;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  /* An answer, written in the report's voice */
+  .answer {
+    font-family: var(--font-serif);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+  }
+
+  /* An excerpt of a page in the sources, smaller and in the interface face */
+  .excerpt {
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .answer > * + *,
+  .excerpt > * + * {
+    margin-top: 0.8em;
+  }
+  .answer :is(ul, ol),
+  .excerpt :is(ul, ol) {
+    padding-left: 1.3em;
+  }
+  .answer ul,
+  .excerpt ul {
+    list-style: disc;
+  }
+  .answer ol,
+  .excerpt ol {
+    list-style: decimal;
+  }
+  .answer li + li,
+  .excerpt li + li {
+    margin-top: 0.3em;
+  }
+  .answer :is(strong, b) {
+    font-weight: 650;
+  }
+  .answer :is(h1, h2, h3, h4),
+  .excerpt :is(h1, h2, h3, h4, h5, h6) {
+    font-weight: 650;
+    line-height: 1.3;
+  }
+  .answer :is(h1, h2, h3, h4) {
+    font-size: 1.125rem;
+  }
+  .excerpt :is(h1, h2, h3, h4, h5, h6) {
+    font-size: 0.9375rem;
+  }
+
+  /* Financial tables: the interface face with tabular figures, so columns of numbers line up */
+  .answer table,
+  .excerpt table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+  }
+  .answer :is(th, td),
+  .excerpt :is(th, td) {
+    padding: 0.4em 0.9em 0.4em 0;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  .answer th,
+  .excerpt th {
+    font-weight: 600;
+    border-bottom-color: var(--foreground);
+  }
+
+  /* A page citation in an answer, marked like a highlighter stroke */
+  .citation {
+    border-radius: 2px;
+    padding: 0 0.12em;
+    background: linear-gradient(
+      transparent 14%,
+      var(--marker) 14%,
+      var(--marker) 90%,
+      transparent 90%
+    );
+    color: inherit;
+  }
+  button.citation:hover {
+    background: linear-gradient(
+      transparent 14%,
+      var(--marker-strong) 14%,
+      var(--marker-strong) 90%,
+      transparent 90%
+    );
+  }
+  button.citation:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* While an answer is on its way, a highlighter stroke sweeps across the waiting text */
+  .reading {
+    background: linear-gradient(var(--marker), var(--marker)) no-repeat left 80%;
+    background-size: 0% 45%;
+    animation: highlight-sweep 1.8s ease-in-out infinite;
+  }
+  @keyframes highlight-sweep {
+    0% {
+      background-size: 0% 45%;
+    }
+    60%,
+    100% {
+      background-size: 100% 45%;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reading {
+      animation: none;
+      background-size: 100% 45%;
+    }
+  }
+}

@@ -27,28 +27,40 @@ It is also faster: 12 seconds for 7 pages. So LlamaParse is the parser going for
 
 # Where we left off (October 24, 2026)
 
-**State:** ingestion and generation work end to end on the full NVIDIA 2026 annual report, from the command line. There is no API or UI yet.
+**State:** ingestion, generation, the FastAPI chatbot backend and the React web UI work end to end on the full NVIDIA 2026 annual report.
 
 - `ingest.py` runs the LlamaParse pipeline from notebook 06, described in AGENTS.md. The report's 175 pages became 377 text chunks and 12 chart documents.
 - **Generation moved from Groq to DeepSeek** (`deepseek-flash`, the chart description model), to get away from Groq's free-tier rate limits. DeepSeek makes parallel searches, which needed three fixes in `generate.py`: the Chroma store is opened once and shared (opening it from several threads at once failed inside Chroma), `show_retrieved_images` shows the figures of every parallel search, and `answer_question()` lists a chunk found by two searches once.
 - **Embeddings moved from Nemotron on OpenRouter to `jina-embeddings-v5-text-small`**, because free OpenRouter models allow only 50 requests a day. The store was re-embedded (7 minutes, no parse or description calls). The Nemotron store was backed up outside the repo for this session only.
 - **All 6 test questions in `generate.py` are answered correctly with DeepSeek and Jina**, with page citations: the income statement numbers, the checkmark director table, the page 8 diagram (its image ranked first), the stock performance graph, and a refusal for smartphone revenue, which the report never mentions. The expected page ranked first for 4 of the 5 document questions. For the revenue question, page 23 (the business overview, with revenue but not net income) ranked first and page 139 second, and the answer used both.
 
-## Next: the FastAPI backend
+## Done: the FastAPI backend
 
-The plan is a chatbot over this one document, ingested ahead of time. Ingestion stays a command-line step, not an endpoint.
+A chatbot over this one document, ingested ahead of time. Ingestion stays a command-line step, not an endpoint. `api.py` is described in AGENTS.md. The user's design decisions:
 
-1. **Add FastAPI.** It is not installed yet. Add it with `uv add`, pin it in `requirements.txt` too, and reinstall `nbclient` and `nbformat` afterwards (see Local development). `uvicorn` is already installed as a Chroma dependency; pin it as well, since the API runs on it.
-2. **Decide with the user first:** single-turn questions, as `answer_question()` works now, or a chat that remembers earlier turns (pass the earlier messages to the agent, or use a LangGraph checkpointer with a thread id). Check the LangChain MCP docs before choosing.
-3. **Build the agent once at startup.** `answer_question()` calls `build_agent()` on every call. Let it take the agent instead.
-4. **Add `multimodal_rag/api.py`:**
-   - `POST /ask` with `{"question": ...}`, returning the `answer_question()` dict;
-   - serve the chart images, so the UI can show a retrieved chart from its `image_path` (for example a `StaticFiles` mount of `parsed/`);
-   - `GET /health`;
-   - a clear JSON error when a model or embedding call still fails after its retries (a 429, or the 402 that a third-party source says Jina returns once the key's tokens run out);
-   - CORS for the web UI's origin.
-5. **Run one uvicorn worker** (`uvicorn multimodal_rag.api:app`), because Chroma's on-disk store is not safe across processes.
-6. **Then the web UI.**
+- **The server keeps the history, the UI does not.** The UI keeps only the conversation id, in a JavaScript variable, not localStorage, so a reload starts a new conversation. The user is fine with conversations vanishing on a reload or a server restart.
+- **No LangGraph checkpointer.** A plain dict in memory keeps the last 3 questions and answers of each conversation, text only, and at most 1,000 conversations, dropping the least recently used.
+
+Tested: an offline check with a stand-in for `answer_question()` covered the history cap, unknown ids, dropping the least recently used conversation, the 429/502 error JSON, the image route and the 422 for a missing question. Then a live run of uvicorn: a question about revenue, then "And the year before?" (the model searched for fiscal 2025 and gave $130,497 million revenue and $72,880 million net income, as on page 139), then "Is there a chart comparing that with the stock market?" (the page 123 graph, whose image the API served).
+
+## Done: the web UI
+
+The user has little frontend experience and did not want a plain HTML page, so the choice was React with Vite, TypeScript, Tailwind CSS v4 and shadcn/ui, in `frontend/` (described in AGENTS.md). Chainlit was the Python alternative offered. There is no CORS: Vite's dev server forwards API calls in development, and FastAPI serves the build.
+
+Tested: `npm run build` and `npm run lint` pass. Headless Edge screenshots, driven by Playwright from a throwaway environment, covered the empty screen, the loading sweep, an answer with its citation marks, an opened page 139 excerpt (the income statement table), a follow-up that found the page 123 chart, the chart's dialog, phone width, and a faked 429 with "Ask again". There were no console errors, and the Vite dev server forwarded `/health` and a chart image to the API.
+
+Lessons:
+- `shadcn init -t vite` runs `git init` inside the new folder. That nested repository was deleted (it held only the scaffold's first commit), so the main repo tracks `frontend/`.
+- On Windows, stopping `npm run dev` leaves Vite's `node` process listening on port 5173. Find it with `netstat -ano` and stop it.
+- To see the UI without a browser tool: `uv run --no-project --with playwright python <script>` with `p.chromium.launch(channel="msedge")` uses the installed Edge, so no browser download is needed and nothing is added to the project.
+
+## Next
+
+Nothing is decided. Candidates:
+- **Streaming:** show the answer as it is written, and the searches as they happen ("Searching: fiscal 2025 revenue"). It needs a streaming endpoint in FastAPI (for example server-sent events with the agent's `stream`) and a UI that reads it. Measured end to end, answers take 3 to 7 seconds (3 with one search, 6.5 with three), so this matters less than first thought, when the wait was guessed at 5 to 20 seconds.
+- **Check the Jina balance** on its dashboard: the re-embed and the tests since spent an estimated 300,000 tokens of the one-time grant.
+- **The model's own arithmetic** (see Open issues): one system prompt line.
+- **The evaluation set** of 25 to 30 questions.
 
 ## Open issues
 
@@ -60,7 +72,7 @@ The plan is a chatbot over this one document, ingested ahead of time. Ingestion 
 - **The refusal wording varies.** For the smartphone question DeepSeek said the report "does not report a separate revenue figure for smartphone sales" instead of the system prompt's exact sentence. The meaning is right, but a UI that looks for the exact sentence would miss it.
 - **Unchecked:** whether tables continued over pages (merged onto their first page) are found by questions about them.
 - **Later:** an evaluation set of 25 to 30 report questions with their expected page and answer, to measure how often the right page is retrieved and the answer is correct.
-- **The model adds its own arithmetic.** For the stock question, Qwen called NVIDIA's return "7.2 times" the S&P 500's, which is the ratio of ending values, not of returns. DeepSeek gave the returns correctly (about 1,349% against 100%), but still adds figures the report does not state, such as "14.5x the initial investment" and "outperformed the S&P 500 by more than 7x".
+- **The model adds its own arithmetic.** For the stock question, Qwen called NVIDIA's return "7.2 times" the S&P 500's, which is the ratio of ending values, not of returns. DeepSeek gave the returns correctly (about 1,349% against 100%), but still adds figures the report does not state, such as "14.5x the initial investment" and "outperformed the S&P 500 by more than 7x". In one API test it called the ending values of $100 ($1,448.75 and $200.33) a "~1,449% versus ~200%" cumulative return, which is wrong (the returns are about 1,349% and 100%). A system prompt line such as "quote figures as the document states them, and do not compute new ones" may help.
 - **Small things:**
   - `main.py` is the unused `uv init` stub.
   - `pyproject.toml` says `requires-python >= 3.13`, while the VM setup below uses 3.12. That setup installs from `requirements.txt`, which works, but `uv sync` would refuse.
@@ -84,12 +96,15 @@ RESULT_PATH.write_text(json.dumps(job.model_dump(mode="json"), indent=1))
 
 Then `python -m multimodal_rag.ingest` downloads the images and describes the 12 charts (12 DeepSeek calls).
 
+`frontend/node_modules` and `frontend/dist` are git-ignored too: run `npm install` and `npm run build` in `frontend/` on a new machine.
+
 ## Local development (Windows)
 
 - Windows 11, `.venv` with Python 3.13. Packages are managed with uv (`pyproject.toml`, `uv.lock`), and `requirements.txt` is kept in step: add a package with `uv add "<package>==<version>"` and the same pin in `requirements.txt`. `unstructured[all-docs]` is no longer a dependency; only notebooks 01 and 03 need it.
-- Run modules from the project root with the venv's Python: `.venv/Scripts/python.exe -u -m multimodal_rag.ingest`. `-u` shows progress when output goes to a file.
+- Run modules from the project root with the venv's Python: `.venv/Scripts/python.exe -u -m multimodal_rag.ingest`. `-u` shows progress when output goes to a file. Start the API the same way: `.venv/Scripts/python.exe -m uvicorn multimodal_rag.api:app --port 8000`.
+- The UI needs Node.js (22 is installed). Run `npm install` once in `frontend/`, then `npm run dev` for development or `npm run build` for the version the API serves at http://127.0.0.1:8000/.
 - Set `PYTHONUTF8=1` when output is redirected or piped. Otherwise Python writes cp1252, and printing a `✓` from the director table raises `UnicodeEncodeError`.
-- `nbclient` and `nbformat` are installed in `.venv` only, to run notebooks headless. `uv add` and `uv remove` sync `.venv` to the lock file and uninstall them, so reinstall them afterwards: `uv pip install --python .venv/Scripts/python.exe "nbclient==0.11.0" "nbformat==5.11.1"`.
+- `nbclient` and `nbformat` are installed in `.venv` only, to run notebooks headless. `uv remove` syncs `.venv` exactly to the lock file and uninstalls them (`uv add` kept them), so after a `uv remove` reinstall them: `uv pip install --python .venv/Scripts/python.exe "nbclient==0.11.0" "nbformat==5.11.1"`.
 
 ## Lessons from the full run
 
@@ -206,3 +221,7 @@ Create `.env` with `JINA_API_KEY`, `LLAMA_CLOUD_API_KEY` and `DEEPSEEK_API_KEY` 
 - LlamaParse: `GET https://api.cloud.llamaindex.ai/api/v1/projects` with the key as a Bearer token must return 200. It spends no credits. (`LlamaCloud().files.list()` is lazy and does not check the key.)
 
 Notebooks are run headless with `nbclient` and `nbformat`, which are not in `requirements.txt`. Install them into `.venv` only.
+
+## 5. Web UI
+
+Not tried on a VM yet. The UI needs Node.js: check `node --version` first. Without sudo, conda-forge's `nodejs` package installed into the home directory, like the PDF tools in section 2, should work. Then run `npm install` and `npm run build` in `frontend/`, and the API serves the UI at `/`. To reach it from another machine, start uvicorn with `--host 0.0.0.0` or forward the port over SSH.
