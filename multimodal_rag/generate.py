@@ -4,7 +4,8 @@ The model decides for itself whether to search. When it does, it calls the searc
 tool, reads the chunks that come back (passages with their tables, and figures), and then answers
 with the page numbers it used. Questions that need nothing from the document are answered without a search.
 
-Use build_agent() once and answer_question() for each question from other code, as api.py does.
+Use build_agent() once, then for each question stream_answer() to follow the agent as it works, as
+api.py does, or answer_question() for the result alone.
 Run this file alone to try the test questions:  python -m multimodal_rag.generate
 All settings live in config.py. Run ingest.py first so the vector store exists.
 """
@@ -15,7 +16,7 @@ import os
 from langchain.agents import create_agent
 from langchain.agents.middleware import before_model
 from langchain.tools import tool
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage
 from langchain_openai import ChatOpenAI
 
 from multimodal_rag import config
@@ -126,8 +127,13 @@ def build_agent():
     )
 
 
-def answer_question(agent, question, history=(), thread_id=None):
-    """Let the agent answer one question. Returns the answer, the model, and any searches and chunks it used.
+def stream_answer(agent, question, history=(), thread_id=None):
+    """Let the agent answer one question, yielding (kind, data) events as it works:
+
+    ("search", {"query": ...}) when the model starts a search, ("text", {"text": ...}) for each new piece
+    of the answer, and last ("done", result), with the answer, the model, and any searches and chunks it used.
+    A search comes once the model call that asked for it has finished, so any text before it was the model's
+    lead-in ("I'll look that up"), not the answer, which is the text after the last search.
 
     history holds the earlier turns of the conversation, [{"question": ..., "answer": ...}], oldest first.
     Only their text is passed on, not their search results or figures, so later model calls stay small.
@@ -140,7 +146,22 @@ def answer_question(agent, question, history=(), thread_id=None):
     conversation.append({"role": "user", "content": question})
 
     run_config = {"metadata": {"thread_id": thread_id}} if thread_id else None
-    messages = agent.invoke({"messages": conversation}, config=run_config)["messages"]
+    messages = []
+    for part in agent.stream(
+        {"messages": conversation},
+        config=run_config,
+        stream_mode=["messages", "updates", "values"],
+        version="v2",
+    ):
+        if part["type"] == "messages":  # a piece of a model call's output
+            token, _ = part["data"]
+            if isinstance(token, AIMessageChunk) and token.text:
+                yield "text", {"text": token.text}
+        elif part["type"] == "updates" and "model" in part["data"]:  # a model call finished
+            for tool_call in part["data"]["model"]["messages"][-1].tool_calls:
+                yield "search", {"query": tool_call["args"]["query"]}
+        elif part["type"] == "values":  # the whole conversation so far; the last one is the final state
+            messages = part["data"]["messages"]
     final_message = messages[-1]
 
     search_queries = []
@@ -152,13 +173,23 @@ def answer_question(agent, question, history=(), thread_id=None):
             for chunk in message.artifact:
                 chunks.setdefault(chunk["id"], chunk)
 
-    return {
+    yield "done", {
         "question": question,
         "answer": final_message.text,
         "model": final_message.response_metadata["model_name"],
         "search_queries": search_queries,  # empty when the model answered without searching
         "chunks": list(chunks.values()),
     }
+
+
+def answer_question(agent, question, history=(), thread_id=None):
+    """Let the agent answer one question. Returns the answer, the model, and any searches and chunks it used.
+
+    It runs stream_answer() and keeps only its result; see there for history and thread_id.
+    """
+    for kind, data in stream_answer(agent, question, history, thread_id):
+        if kind == "done":
+            return data
 
 
 def print_result(result):

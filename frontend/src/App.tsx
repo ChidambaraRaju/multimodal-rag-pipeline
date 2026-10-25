@@ -21,13 +21,22 @@ export default function App() {
     end.current?.scrollIntoView({ block: "end" })
   }, [turns.length])
 
-  function update(id: number, changes: Partial<Turn>) {
-    setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, ...changes } : turn)))
+  // Changes to one turn, given as values or worked out from the turn as it is now
+  function update(id: number, changes: Partial<Turn> | ((turn: Turn) => Partial<Turn>)) {
+    setTurns((current) =>
+      current.map((turn) =>
+        turn.id === id ? { ...turn, ...(typeof changes === "function" ? changes(turn) : changes) } : turn
+      )
+    )
   }
 
   async function answer(id: number, question: string) {
     try {
-      const result = await ask(question, conversationId.current)
+      const result = await ask(question, conversationId.current, {
+        // Text before a search was the model's lead-in, not the answer, so it is dropped
+        onSearch: (query) => update(id, (turn) => ({ searches: [...turn.searches, query], draft: "" })),
+        onText: (text) => update(id, (turn) => ({ draft: turn.draft + text })),
+      })
       conversationId.current = result.conversation_id
       update(id, { status: "done", answer: result })
     } catch (error) {
@@ -39,12 +48,12 @@ export default function App() {
 
   function askQuestion(question: string) {
     const id = nextTurnId.current++
-    setTurns((current) => [...current, { id, question, status: "loading" }])
+    setTurns((current) => [...current, { id, question, status: "loading", searches: [], draft: "" }])
     answer(id, question)
   }
 
   function askAgain(turn: Turn) {
-    update(turn.id, { status: "loading", error: undefined })
+    update(turn.id, { status: "loading", error: undefined, searches: [], draft: "" })
     answer(turn.id, turn.question)
   }
 

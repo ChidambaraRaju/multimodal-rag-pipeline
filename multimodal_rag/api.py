@@ -1,5 +1,8 @@
 """The chatbot API over the ingested document.
 
+Each answer streams to the page as server-sent events while the agent works: its searches, then the
+answer piece by piece, then the whole result with its sources.
+
 The server keeps the recent questions and answers of each conversation in memory, so a follow-up
 question can refer to earlier ones. The UI only keeps the conversation id. Conversations are lost
 when the server restarts, and a new page starts a new one.
@@ -12,13 +15,13 @@ is not safe across processes. Run ingest.py first so the vector store exists.
 import uuid
 
 import openai
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from multimodal_rag import config
-from multimodal_rag.generate import answer_question, build_agent
+from multimodal_rag.generate import build_agent, stream_answer
 from multimodal_rag.parse import IMAGE_DIRECTORY
 
 app = FastAPI(title="ReportLens")
@@ -39,12 +42,14 @@ class Question(BaseModel):
     conversation_id: str | None = None  # left out for the first question of a conversation
 
 
-@app.post("/ask")
+@app.post("/ask", response_class=EventSourceResponse)
 def ask(request: Question):
-    """Answer a question, with the earlier turns of its conversation as context.
+    """Answer a question as a stream of events, with the earlier turns of its conversation as context.
 
+    The events: "search" when the model starts a search, "text" for each new piece of the answer, and last
+    "done", with the conversation id, the answer, the model, the searches and the retrieved chunks.
+    Text before a search was the model's lead-in, not the answer, so the UI drops it when the search arrives.
     A missing or unknown conversation id starts a new conversation, for example after the server restarted.
-    Returns the conversation id with the answer, the model, the searches and the retrieved chunks.
     """
     history = conversations.pop(request.conversation_id, None)
     if history is None:
@@ -55,29 +60,28 @@ def ask(request: Question):
     if len(conversations) > config.MAX_CONVERSATIONS:
         del conversations[next(iter(conversations))]
 
-    result = answer_question(agent, request.question, history, thread_id=conversation_id)
-    history.append({"question": request.question, "answer": result["answer"]})
-    del history[:-config.CHAT_HISTORY_TURNS]
-    return {"conversation_id": conversation_id, **result}
+    try:
+        for kind, data in stream_answer(agent, request.question, history, thread_id=conversation_id):
+            if kind == "done":
+                history.append({"question": request.question, "answer": data["answer"]})
+                del history[:-config.CHAT_HISTORY_TURNS]
+                data = {"conversation_id": conversation_id, **data}
+            yield ServerSentEvent(event=kind, data=data)
+    except openai.APIError as error:
+        # A DeepSeek or Jina call that still failed after its retries, for example a rate limit or a used-up
+        # Jina balance. Both are called through the OpenAI client, so both raise its errors. The stream has
+        # already started with status 200, so the failure ends it as an "error" event, with the service's
+        # own status (None when it could not be reached), so the UI can tell a rate limit from other failures.
+        status = getattr(error, "status_code", None)
+        yield ServerSentEvent(
+            event="error",
+            data={"error": error.message, "service": error.request.url.host, "status": status},
+        )
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-
-@app.exception_handler(openai.APIError)
-async def service_error(request: Request, error: openai.APIError):
-    """A DeepSeek or Jina call that still failed after its retries, for example a rate limit or a used-up Jina balance.
-
-    Both are called through the OpenAI client, so both raise its errors. A rate limit stays a 429, so the UI
-    can ask the user to wait; anything else is a 502, since the failure is in a service behind this API.
-    """
-    status = getattr(error, "status_code", None)  # None when the service could not be reached
-    return JSONResponse(
-        status_code=429 if status == 429 else 502,
-        content={"error": error.message, "service": error.request.url.host, "status": status},
-    )
 
 
 # The built web UI (npm run build in frontend/), served at / so the page and the API share one origin

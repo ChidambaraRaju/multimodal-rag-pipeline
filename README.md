@@ -84,21 +84,23 @@ Start the chatbot API, with a single worker:
 uvicorn multimodal_rag.api:app
 ```
 
-Then ask a question, and send the returned `conversation_id` with a follow-up so the model sees the earlier turns:
+Then ask a question, and send the returned `conversation_id` with a follow-up so the model sees the earlier turns (`-N` shows the answer as it streams in):
 
 ```bash
-curl -X POST http://127.0.0.1:8000/ask -H "Content-Type: application/json" \
+curl -N -X POST http://127.0.0.1:8000/ask -H "Content-Type: application/json" \
   -d '{"question": "What were NVIDIA'"'"'s revenue and net income in fiscal year 2026?"}'
 
-curl -X POST http://127.0.0.1:8000/ask -H "Content-Type: application/json" \
+curl -N -X POST http://127.0.0.1:8000/ask -H "Content-Type: application/json" \
   -d '{"question": "And the year before?", "conversation_id": "<id from the first answer>"}'
 ```
+
+The answer streams as server-sent events: `search` with each search the model starts, `text` with each new piece of the answer, and last `done`, with the `conversation_id`, the whole answer and its sources. A search means the text before it was the model's lead-in ("I'll look that up"), not the answer. If DeepSeek or Jina fails, the stream ends with an `error` event instead.
 
 The server keeps the last 3 questions and answers of each conversation in memory, so conversations are lost when it restarts. A chart from the answer is served at `/` + its `image_path`, and `GET /health` reports that the server is up. The interactive API docs are at http://127.0.0.1:8000/docs.
 
 ### Web UI
 
-The UI in `frontend/` is a React app (Vite, TypeScript, Tailwind CSS and shadcn/ui). It shows each answer with its page citations, the retrieved figures, and the retrieved text of each cited page.
+The UI in `frontend/` is a React app (Vite, TypeScript, Tailwind CSS and shadcn/ui). It writes each answer as it streams in, with the searches the model makes, then shows its page citations, the retrieved figures, and the retrieved text of each cited page.
 
 While working on it, run the API as above and, in a second terminal, the Vite dev server, which reloads the page on every change:
 
@@ -127,6 +129,19 @@ print(result["answer"])
 ```
 
 `answer_question` returns a dictionary with `question`, `answer`, `model`, `search_queries`, and `chunks`. `search_queries` is empty when the model answered without searching. Each chunk has `id` (such as `page139-2`, the 2nd chunk of page 139), `score`, `page_number`, `printed_page_number` (empty when the page has none), `text`, and `image_path`. `image_path` is set only for a chart, and `text` is then its description. Pass `history=[{"question": ..., "answer": ...}]` to give it the earlier turns of a conversation, and `thread_id` to group a conversation's traces in LangSmith.
+
+To follow the answer as it is written, use `stream_answer` with the same arguments. It yields `(kind, data)` pairs, the events the API streams, and last `("done", result)`, the dictionary above:
+
+```python
+from multimodal_rag.generate import build_agent, stream_answer
+
+agent = build_agent()
+for kind, data in stream_answer(agent, "Your question here"):
+    if kind == "search":
+        print(f"\n[searching: {data['query']}]")
+    elif kind == "text":
+        print(data["text"], end="", flush=True)
+```
 
 ## Configuration
 
@@ -169,7 +184,7 @@ multimodal_rag/
 frontend/       web UI: React, Vite, TypeScript, Tailwind CSS and shadcn/ui
   src/App.tsx         the conversation: questions, answers, new chat
   src/components/     the question box, each exchange, its sources and figures, markdown with page citations
-  src/lib/api.ts      the call to POST /ask, and error messages
+  src/lib/api.ts      the call to POST /ask, reading its event stream, and error messages
   src/lib/document.ts the document's title, page count and example questions
 notebooks/      experiments the pipeline grew out of
 parsed/         saved parse results, cropped images and chart descriptions (not in git)

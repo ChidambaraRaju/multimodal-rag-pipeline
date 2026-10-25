@@ -25,12 +25,12 @@ It is also faster: 12 seconds for 7 pages. So LlamaParse is the parser going for
 - **Account:** the account has 20,000 credits, given for opting into data sharing for model training. Use a separate account without that option for private documents.
 - **Unstructured's hosted API was not an option:** sign-up requires a work email.
 
-# Where we left off (October 24, 2026)
+# Where we left off (October 25, 2026)
 
-**State:** ingestion, generation, the FastAPI chatbot backend and the React web UI work end to end on the full NVIDIA 2026 annual report, and every question is traced in LangSmith.
+**State:** ingestion, generation, the FastAPI chatbot backend and the React web UI work end to end on the full NVIDIA 2026 annual report, answers stream to the page as they are written, and every question is traced in LangSmith.
 
 - `ingest.py` runs the LlamaParse pipeline from notebook 06, described in AGENTS.md. The report's 175 pages became 377 text chunks and 12 chart documents.
-- **Generation moved from Groq to DeepSeek** (`deepseek-flash`, the chart description model), to get away from Groq's free-tier rate limits. DeepSeek makes parallel searches, which needed three fixes in `generate.py`: the Chroma store is opened once and shared (opening it from several threads at once failed inside Chroma), `show_retrieved_images` shows the figures of every parallel search, and `answer_question()` lists a chunk found by two searches once.
+- **Generation moved from Groq to DeepSeek** (`deepseek-flash`, the chart description model), to get away from Groq's free-tier rate limits. DeepSeek makes parallel searches, which needed three fixes in `generate.py`: the Chroma store is opened once and shared (opening it from several threads at once failed inside Chroma), `show_retrieved_images` shows the figures of every parallel search, and the result lists a chunk found by two searches once.
 - **Embeddings moved from Nemotron on OpenRouter to `jina-embeddings-v5-text-small`**, because free OpenRouter models allow only 50 requests a day. The store was re-embedded (7 minutes, no parse or description calls). The Nemotron store was backed up outside the repo for this session only.
 - **All 6 test questions in `generate.py` are answered correctly with DeepSeek and Jina**, with page citations: the income statement numbers, the checkmark director table, the page 8 diagram (its image ranked first), the stock performance graph, and a refusal for smartphone revenue, which the report never mentions. The expected page ranked first for 4 of the 5 document questions. For the revenue question, page 23 (the business overview, with revenue but not net income) ranked first and page 139 second, and the answer used both.
 
@@ -67,6 +67,25 @@ Lessons:
 - A uvicorn server started before the `.env` change does not trace; restart it.
 - Traces were first listed as "LangGraph", LangGraph's default name for the agent's graph. `build_agent()` now passes `name="annual_report_agent"` to `create_agent`, so new traces carry that name; earlier ones keep "LangGraph".
 - Traces first showed token counts but no cost. LangSmith's price table lists `deepseek-flash` under the provider `deepseek`, but `ChatOpenAI` labels its calls `openai`. Both models now pass `metadata={"ls_provider": "deepseek"}`; LangChain applies a model's own `metadata` after its default labels, so it wins. Tested on October 25, 2026 with one revenue question: one search, two model calls, 2,273 input tokens (768 cached) and 149 output tokens, for $0.00032, which matches the price table worked out by hand. Earlier traces keep no cost, since LangSmith does not recalculate them.
+
+## Done: streaming
+
+Answers stream to the page while the agent works: its searches as they start, then the answer piece by piece, then the whole result with its sources. Described in AGENTS.md ("Query path", "API", "Web UI"). The user approved the server-side design and left the UI to Claude:
+
+- **`/ask` streams; there is no second, non-streaming endpoint.** The UI is its only client. `answer_question()` stays for the test questions, built on `stream_answer()`, so there is one code path.
+- **LangGraph's stable `stream(..., version="v2")`**, not `stream_events(version="v3")` (see AGENTS.md).
+- **The `done` result replaces the streamed text**, so the page always ends on what the server saved.
+- **Errors arrive as an `error` event**, since the status is already 200 once streaming starts. The old 429/502 exception handler was removed.
+
+Measured: a greeting's first text came after about 1 second. Questions that searched showed their searches after 1.2 to 1.8 seconds and the first answer text after 2.5 to 4.6, finishing 0.5 to 1 second later. Streaming the text itself saves little, since DeepSeek thinks (its reasoning is dropped by `ChatOpenAI`) before writing quickly; showing the searches is the bigger gain.
+
+Tested: an offline check of `/ask` with a stand-in for `stream_answer()` covered the event format on the wire, the conversation id in `done`, the history cap, unknown ids, a rate limit and an unreachable Jina as `error` events, a failed question not being saved, and the 422. Live, through uvicorn and also through Vite's dev proxy: a revenue question and "And the year before?" streamed with correct answers (pages 139 and 125), and both traces reached LangSmith in one thread, with cost. In headless Edge: the waiting, searching, writing and finished stages, a citation opening the page 139 excerpt after streaming, and faked streams for a rate limit, an unreachable Jina and a stream cut off before `done`. `npm run lint` and `npm run build` pass, and there were no console errors.
+
+Lessons:
+- DeepSeek sometimes writes a lead-in ("I'll look that up") before asking for a search; it streamed before the search event in 3 of the 7 live runs that searched (all three were first questions, none were follow-ups). A search event comes once its model call has finished, so the UI clears the text so far when one arrives.
+- Vite's dev server listens on IPv6 only (`[::1]:5173`): in scripts, reach it at `localhost`, not `127.0.0.1`.
+- `npx prettier --check` fails on every file in `frontend/src`, including untouched ones: the code uses longer lines than `.prettierrc`'s `printWidth` of 80. Match the surrounding style; do not run `prettier --write` over the code.
+- After this change, restart a running uvicorn: an old server would answer the new UI with plain JSON, which the UI reports as an answer cut off.
 
 ## Planned work
 
