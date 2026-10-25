@@ -1,7 +1,7 @@
 [project]
-name = "multimodal-rag-pipeline"
+name = "reportlens"
 version = "0.1.0"
-description = "Add your description here"
+description = "Agentic multimodal RAG for annual reports: answers from text, tables and charts, with page citations"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

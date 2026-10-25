@@ -21,7 +21,7 @@ from multimodal_rag import config
 from multimodal_rag.generate import answer_question, build_agent
 from multimodal_rag.parse import IMAGE_DIRECTORY
 
-app = FastAPI(title="Multimodal RAG")
+app = FastAPI(title="ReportLens")
 agent = build_agent()
 
 # The cropped images, at the image_path each figure chunk carries,

@@ -1,6 +1,6 @@
-# Multimodal RAG
+# ReportLens
 
-A retrieval-augmented generation pipeline for PDF documents that contain text, tables, and images. It answers questions using all three, not only the text, and cites the pages it used.
+ReportLens is a retrieval-augmented generation pipeline for PDF documents that contain text, tables, and images. It answers questions using all three, not only the text, and cites the pages it used.
 
 ## How it works
 

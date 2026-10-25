@@ -1,6 +1,6 @@
-# Multimodal RAG
+# ReportLens
 
-Single-document RAG over a PDF with text, tables, and images. The document is `2026-Annual-Report-Web.pdf`, NVIDIA's 2026 annual report (175 pages), and it is fully ingested. `attention-is-all-you-need-first6.pdf`, the first 6 pages of the attention paper, was the earlier test document; the attention paper's PDFs are git-ignored and exist only on the user's machine. Scale-out (multiple companies, periods, and reports) is out of scope until one document works end to end.
+Single-document RAG over a PDF with text, tables, and images. The project was renamed ReportLens on October 25, 2026 (GitHub: `ChidambaraRaju/reportlens`); the Python package `multimodal_rag`, the local folder and the LangSmith project `multimodal-rag-pipeline` keep the earlier name. The document is `2026-Annual-Report-Web.pdf`, NVIDIA's 2026 annual report (175 pages), and it is fully ingested. `attention-is-all-you-need-first6.pdf`, the first 6 pages of the attention paper, was the earlier test document; the attention paper's PDFs are git-ignored and exist only on the user's machine. Scale-out (multiple companies, periods, and reports) is out of scope until one document works end to end.
 
 Keep the code simple and easy to read. This is the priority. Prefer one plain function per step over abstractions, and do not add options nobody asked for.
 
