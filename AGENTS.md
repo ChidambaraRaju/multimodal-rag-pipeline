@@ -24,6 +24,7 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 - `multimodal_rag/generate.py`: the agent that answers questions, with document search as its tool. Run it from the project root with `python -m multimodal_rag.generate` to try the test questions.
 - `multimodal_rag/api.py`: the FastAPI chatbot backend, which keeps each conversation's recent turns in memory. Run it from the project root with one worker: `uvicorn multimodal_rag.api:app`.
 - `frontend/`: the web UI, a React app built with Vite, TypeScript, Tailwind CSS v4 and shadcn/ui. See "Web UI" below.
+- `docs/cover.png`: the cover image at the top of the README (2560×1280, in the web UI's colours and fonts).
 - `notebooks/multi_modal_rag.ipynb`: the notebook the pipeline came from.
 - `notebooks/01_docling_parse.ipynb`: an earlier Docling and Pinecone experiment. The pipeline no longer uses either.
 - `notebooks/03_annual_report_layout.ipynb` to `notebooks/06_heading_chunks_and_image_documents.ipynb`: the move from Unstructured to LlamaParse. Notebook 06 is the approach `ingest.py` now follows. Notebooks 01, 03 and 05 no longer run against the current code or requirements.
