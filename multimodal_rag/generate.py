@@ -114,6 +114,7 @@ def build_agent():
         api_key=os.environ["DEEPSEEK_API_KEY"],
         temperature=0,
         max_retries=config.MODEL_RETRY_ATTEMPTS,
+        metadata={"ls_provider": "deepseek"},  # ChatOpenAI reports "openai", which LangSmith cannot price
     )
     # The name labels each question's trace in LangSmith; without it, traces are called "LangGraph"
     return create_agent(

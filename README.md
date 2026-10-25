@@ -56,7 +56,7 @@ LANGSMITH_API_KEY=...
 LANGSMITH_PROJECT=multimodal-rag-pipeline
 ```
 
-Each question then appears as a trace with its model calls, searches, retrieved chunks and token counts, and the questions of one API conversation are grouped in the project's Threads tab. The project is created by the first trace.
+Each question then appears as a trace with its model calls, searches, retrieved chunks, token counts and cost, and the questions of one API conversation are grouped in the project's Threads tab. The project is created by the first trace.
 
 ## Usage
 
@@ -177,4 +177,4 @@ parsed/         saved parse results, cropped images and chart descriptions (not 
 
 ## Status
 
-Ingestion, generation and the chatbot API work for a single document: NVIDIA's 2026 annual report (175 pages), which becomes 377 text chunks and 12 chart descriptions. All 6 test questions in `generate.py` are answered correctly, and the API answers follow-up questions within a conversation. The web UI works in development and as a build served by the API.
+Ingestion, generation and the chatbot API work for a single document: NVIDIA's 2026 annual report (175 pages), which becomes 377 text chunks and 12 chart descriptions. All 6 test questions in `generate.py` are answered correctly, and the API answers follow-up questions within a conversation. The web UI works in development and as a build served by the API, and every question can be traced in LangSmith.

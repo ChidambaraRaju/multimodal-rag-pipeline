@@ -66,31 +66,28 @@ Lessons:
 - `Client.list_runs()` and `get_run_url()` are deprecated in `langsmith` 0.14 (removal after January 31, 2027); use `client.runs.query()` and `client.runs.get_url()`.
 - A uvicorn server started before the `.env` change does not trace; restart it.
 - Traces were first listed as "LangGraph", LangGraph's default name for the agent's graph. `build_agent()` now passes `name="annual_report_agent"` to `create_agent`, so new traces carry that name; earlier ones keep "LangGraph".
+- Traces first showed token counts but no cost. LangSmith's price table lists `deepseek-flash` under the provider `deepseek`, but `ChatOpenAI` labels its calls `openai`. Both models now pass `metadata={"ls_provider": "deepseek"}`; LangChain applies a model's own `metadata` after its default labels, so it wins. Tested on October 25, 2026 with one revenue question: one search, two model calls, 2,273 input tokens (768 cached) and 149 output tokens, for $0.00032, which matches the price table worked out by hand. Earlier traces keep no cost, since LangSmith does not recalculate them.
 
-## Next
+## Planned work
 
-Nothing is decided. Candidates:
-- **Streaming:** show the answer as it is written, and the searches as they happen ("Searching: fiscal 2025 revenue"). It needs a streaming endpoint in FastAPI (for example server-sent events with the agent's `stream`) and a UI that reads it. Measured end to end, answers take 3 to 7 seconds (3 with one search, 6.5 with three), so this matters less than first thought, when the wait was guessed at 5 to 20 seconds.
-- **Check the Jina balance** on its dashboard: the re-embed and the tests since spent an estimated 300,000 tokens of the one-time grant.
-- **The model's own arithmetic** (see Open issues): one system prompt line.
-- **The evaluation set** of 25 to 30 questions, as a LangSmith dataset: run the agent over it as an experiment, score the answer and the retrieved pages, and compare experiments after each change.
+Planned work is listed in `TODO.md`, and only there. Keep these markdown files to what has been built.
 
 ## Open issues
 
 - **Jina's free tokens are a one-time grant.** Embeddings moved from Nemotron on OpenRouter, whose free models allow only 50 requests a day, to `jina-embeddings-v5-text-small`. The key's balance is on Jina's dashboard (a third-party source says new keys get 10 million tokens; older ones say 1 million). Each full re-embed spends about 280,000 tokens (an estimate at 2.6 characters a token), and each search about 15. When the grant is used up, the key needs paid tokens (a third-party source says Jina then answers 402); a full re-embed would then cost about a cent.
-- **Groq's limits no longer apply.** Its 7,000 input tokens a minute made a question that retrieves the three largest chunks (about 8,100 tokens, all financial tables) fail with a 413. With DeepSeek, `RETRIEVED_CHUNK_COUNT` could be raised if answers miss context.
+- **Groq's limits no longer apply.** Its 7,000 input tokens a minute made a question that retrieves the three largest chunks (about 8,100 tokens, all financial tables) fail with a 413.
 - **Removed dependencies:** `langchain-groq`, `langchain-openrouter` and `openrouter` were removed, since only the old notebooks 01 and `multi_modal_rag` import them; install them separately to run those. `GROQ_API_KEY` and `OPENROUTER_API_KEY` in `.env` are unused.
-- **Cost:** DeepSeek is paid per token. A question took 2 to 4 model calls, 400 to 5,000 input tokens and 50 to 350 output tokens each.
+- **Cost:** DeepSeek is paid per token. A question took 2 to 4 model calls, 400 to 5,000 input tokens and 50 to 350 output tokens each. LangSmith shows each trace's cost, from its own price table rather than DeepSeek's bill.
 - **The relevance cutoff only drops noise.** With Jina, the expected chunks scored 0.50 to 0.82, an off-topic question ("What is the capital of France?") at most 0.22, and the smartphone question, which has no answer, 0.66 at the top. So `MIN_RELEVANCE_SCORE` (0.3) still sits between the noise and the answers, but cannot detect unanswerable questions; the system prompt does that, and it worked. The director question's right chunks score lowest (0.35 to 0.56), so a cutoff above about 0.35 would start dropping them.
 - **The refusal wording varies.** For the smartphone question DeepSeek once said the report "does not report a separate revenue figure for smartphone sales" instead of the system prompt's exact sentence. Since the prompt names the report (`config.DOCUMENT_TITLE`), it has used the exact sentence, after a short explanation. The meaning was right both times, but a UI that looks for the exact sentence could miss it.
 - **Identity.** The system prompt used to say only "a document", so "Who are you?" got "an assistant that answers questions about a document you've provided". It now names the report and says how to introduce itself; "Who are you?" gets "I'm an assistant that answers questions about NVIDIA's 2026 Annual Report, using its text, financial tables and charts, and citing the pages I use."
 - **Unchecked:** whether tables continued over pages (merged onto their first page) are found by questions about them.
-- **Later:** an evaluation set of 25 to 30 report questions with their expected page and answer, to measure how often the right page is retrieved and the answer is correct.
-- **The model adds its own arithmetic.** For the stock question, Qwen called NVIDIA's return "7.2 times" the S&P 500's, which is the ratio of ending values, not of returns. DeepSeek gave the returns correctly (about 1,349% against 100%), but still adds figures the report does not state, such as "14.5x the initial investment" and "outperformed the S&P 500 by more than 7x". In one API test it called the ending values of $100 ($1,448.75 and $200.33) a "~1,449% versus ~200%" cumulative return, which is wrong (the returns are about 1,349% and 100%). A system prompt line such as "quote figures as the document states them, and do not compute new ones" may help.
+- **The model adds its own arithmetic.** For the stock question, Qwen called NVIDIA's return "7.2 times" the S&P 500's, which is the ratio of ending values, not of returns. DeepSeek gave the returns correctly (about 1,349% against 100%), but still adds figures the report does not state, such as "14.5x the initial investment" and "outperformed the S&P 500 by more than 7x". In one API test it called the ending values of $100 ($1,448.75 and $200.33) a "~1,449% versus ~200%" cumulative return, which is wrong (the returns are about 1,349% and 100%).
 - **Small things:**
   - `main.py` is the unused `uv init` stub.
   - `pyproject.toml` says `requires-python >= 3.13`, while the VM setup below uses 3.12. That setup installs from `requirements.txt`, which works, but `uv sync` would refuse.
-  - The PDFs are committed to the public repo; the user may prefer linking to their source.
+  - The PDFs are committed to the public repo.
+- **Answer time:** measured end to end with real search, 3 to 7 seconds (about 3 with one search, 6.5 with three).
 
 ## The ingested data exists only on this machine
 

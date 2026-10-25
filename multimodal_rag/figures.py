@@ -61,6 +61,7 @@ def description_model():
         temperature=0,
         max_tokens=config.DESCRIPTION_MAX_TOKENS,
         max_retries=config.MODEL_RETRY_ATTEMPTS,
+        metadata={"ls_provider": "deepseek"},  # ChatOpenAI reports "openai", which LangSmith cannot price
     )
 
 
