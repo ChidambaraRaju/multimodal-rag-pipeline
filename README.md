@@ -152,7 +152,7 @@ Every setting lives in `multimodal_rag/config.py`:
 | `MODEL_RETRY_ATTEMPTS` | Retries for a rate-limited or unavailable model call |
 | `MIN_CHUNK_CHARACTERS` | A section shorter than this joins the next one |
 
-The PDFs in this repository are sample documents used during development. Point `DOCUMENT_PATH` at any PDF to use your own, set `DOCUMENT_TITLE` to its name, and update the document's title, page count and example questions for the web UI in `frontend/src/lib/document.ts`.
+`2026-Annual-Report-Web.pdf` in this repository is NVIDIA's 2026 annual report, the document used during development. Point `DOCUMENT_PATH` at any PDF to use your own, set `DOCUMENT_TITLE` to its name, and update the document's title, page count and example questions for the web UI in `frontend/src/lib/document.ts`.
 
 ## Project layout
 

@@ -83,10 +83,7 @@ Planned work is listed in `TODO.md`, and only there. Keep these markdown files t
 - **Identity.** The system prompt used to say only "a document", so "Who are you?" got "an assistant that answers questions about a document you've provided". It now names the report and says how to introduce itself; "Who are you?" gets "I'm an assistant that answers questions about NVIDIA's 2026 Annual Report, using its text, financial tables and charts, and citing the pages I use."
 - **Unchecked:** whether tables continued over pages (merged onto their first page) are found by questions about them.
 - **The model adds its own arithmetic.** For the stock question, Qwen called NVIDIA's return "7.2 times" the S&P 500's, which is the ratio of ending values, not of returns. DeepSeek gave the returns correctly (about 1,349% against 100%), but still adds figures the report does not state, such as "14.5x the initial investment" and "outperformed the S&P 500 by more than 7x". In one API test it called the ending values of $100 ($1,448.75 and $200.33) a "~1,449% versus ~200%" cumulative return, which is wrong (the returns are about 1,349% and 100%).
-- **Small things:**
-  - `main.py` is the unused `uv init` stub.
-  - `pyproject.toml` says `requires-python >= 3.13`, while the VM setup below uses 3.12. That setup installs from `requirements.txt`, which works, but `uv sync` would refuse.
-  - The PDFs are committed to the public repo.
+- **Small thing:** `pyproject.toml` says `requires-python >= 3.13`, while the VM setup below uses 3.12. That setup installs from `requirements.txt`, which works, but `uv sync` would refuse.
 - **Answer time:** measured end to end with real search, 3 to 7 seconds (about 3 with one search, 6.5 with three).
 
 ## The ingested data exists only on this machine
@@ -108,6 +105,8 @@ RESULT_PATH.write_text(json.dumps(job.model_dump(mode="json"), indent=1))
 Then `python -m multimodal_rag.ingest` downloads the images and describes the 12 charts (12 DeepSeek calls).
 
 `frontend/node_modules` and `frontend/dist` are git-ignored too: run `npm install` and `npm run build` in `frontend/` on a new machine.
+
+The attention paper's PDFs (`attention-is-all-you-need.pdf` and `attention-is-all-you-need-first6.pdf`) are git-ignored as well (since October 25, 2026; earlier commits still hold them), so they too exist only on the user's machine. Notebooks 01 and `multi_modal_rag` and the GPU check below read them: copy them over to run those. The report's PDF, `2026-Annual-Report-Web.pdf`, is in git.
 
 ## Local development (Windows)
 
@@ -208,7 +207,7 @@ readelf -d .venv/lib/python3.12/site-packages/onnxruntime/capi/libonnxruntime_pr
 # must show libcublasLt.so.12, not .so.13
 ```
 
-**Verify.** The parse must show both models on the GPU:
+**Verify.** The parse must show both models on the GPU. Copy `attention-is-all-you-need-first6.pdf` over first; it is not in git.
 
 ```bash
 .venv/bin/python -c "

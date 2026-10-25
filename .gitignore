@@ -6,3 +6,4 @@ crops/
 vector_store/
 notebooks/llamaparse_output/
 parsed/
+attention-is-all-you-need*.pdf

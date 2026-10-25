@@ -1,6 +1,6 @@
 # Multimodal RAG
 
-Single-document RAG over a PDF with text, tables, and images. The document is `2026-Annual-Report-Web.pdf`, NVIDIA's 2026 annual report (175 pages), and it is fully ingested. `attention-is-all-you-need-first6.pdf`, the first 6 pages of the attention paper, was the earlier test document. Scale-out (multiple companies, periods, and reports) is out of scope until one document works end to end.
+Single-document RAG over a PDF with text, tables, and images. The document is `2026-Annual-Report-Web.pdf`, NVIDIA's 2026 annual report (175 pages), and it is fully ingested. `attention-is-all-you-need-first6.pdf`, the first 6 pages of the attention paper, was the earlier test document; the attention paper's PDFs are git-ignored and exist only on the user's machine. Scale-out (multiple companies, periods, and reports) is out of scope until one document works end to end.
 
 Keep the code simple and easy to read. This is the priority. Prefer one plain function per step over abstractions, and do not add options nobody asked for.
 
@@ -25,7 +25,7 @@ Experiments belong in notebooks. The user reviews each notebook run and decides 
 - `multimodal_rag/api.py`: the FastAPI chatbot backend, which keeps each conversation's recent turns in memory. Run it from the project root with one worker: `uvicorn multimodal_rag.api:app`.
 - `frontend/`: the web UI, a React app built with Vite, TypeScript, Tailwind CSS v4 and shadcn/ui. See "Web UI" below.
 - `notebooks/multi_modal_rag.ipynb`: the notebook the pipeline came from.
-- `notebooks/01_docling_parse.ipynb`, `notebooks/02_native_docling_loader.ipynb`: earlier Docling and Pinecone experiments. The pipeline no longer uses either.
+- `notebooks/01_docling_parse.ipynb`: an earlier Docling and Pinecone experiment. The pipeline no longer uses either.
 - `notebooks/03_annual_report_layout.ipynb` to `notebooks/06_heading_chunks_and_image_documents.ipynb`: the move from Unstructured to LlamaParse. Notebook 06 is the approach `ingest.py` now follows. Notebooks 01, 03 and 05 no longer run against the current code or requirements.
 
 ## Ingestion
