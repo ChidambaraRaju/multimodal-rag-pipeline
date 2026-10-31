@@ -60,6 +60,8 @@ LANGSMITH_PROJECT=multimodal-rag-pipeline
 
 Each question then appears as a trace with its model calls, searches, retrieved chunks, token counts and cost, and the questions of one API conversation are grouped in the project's Threads tab. The project is created by the first trace.
 
+The off-topic evaluation in `evals/notebooks/off_topic_eval.ipynb` is judged by Liquid AI's `d1.1` decision model. To run it, also add `LIQUID_API_KEY=...`.
+
 ## Usage
 
 Run these commands from the project root.
