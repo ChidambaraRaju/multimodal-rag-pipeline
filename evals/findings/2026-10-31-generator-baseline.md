@@ -100,7 +100,7 @@ It reported cash, cash equivalents and marketable securities from the balance sh
 
 - **Time:** 149 seconds answering, 107 seconds scoring, 266 seconds for the whole notebook.
 - **Judge tokens: not reported.** deepeval reported no tokens for `deepseek-v4-pro` (the notebook prints 0). In stage 1 it reported them for `deepseek-flash`, which it had been given prices for.
-- **Cost:** about $0.08 for answering and judging together. The DeepSeek balance read $1.81 before answering, $1.79 just after scoring, and $1.73 two minutes later, so it updates with a delay.
+- **Cost: about $0.48, far more than expected.** The DeepSeek balance read $1.81 before answering, $1.79 just after scoring, $1.73 two minutes later and $1.33 six minutes later: it updates several minutes after the calls. (This file first said "about $0.08", read from the balance too soon.) DeepSeek's console breaks usage down by model; most of the cost is likely the judge, since `deepseek-v4-pro` is priced well above `deepseek-flash`, its thinking is billed as output, and it read every context at least once (about 62,000 tokens in all, a third of them question 14's 28 chunks). The agent's calls were probably the smaller part, since each call resends a conversation DeepSeek has mostly cached. **After this run the user asked that `deepseek-v4-pro` not be run again.**
 
 ## Limitations
 
