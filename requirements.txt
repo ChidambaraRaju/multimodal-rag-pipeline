@@ -1,3 +1,4 @@
+deepeval==4.3.2
 fastapi==0.162.0
 ipykernel==7.4.0
 langchain==1.4.4

@@ -5,6 +5,7 @@ description = "Agentic multimodal RAG for annual reports: answers from text, tab
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "deepeval==4.3.2",
     "fastapi==0.162.0",
     "ipykernel==7.4.0",
     "langchain==1.4.4",
