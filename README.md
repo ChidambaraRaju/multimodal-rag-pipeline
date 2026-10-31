@@ -15,7 +15,7 @@ ReportLens is a retrieval-augmented generation pipeline for PDF documents that c
 
 **Generation** is agentic. The answering model is given document search as a tool and decides for itself when to use it:
 
-1. **Decide.** The model reads the question. A greeting or a question that is not about the document is answered directly.
+1. **Decide.** The model reads the question. A greeting or a question about the assistant itself is answered directly, and a request that has nothing to do with the document is declined.
 2. **Search.** Otherwise the model calls the search tool, which fetches the most relevant chunks and charts. It can search again with a different query if the first results fall short.
 3. **Answer.** The model answers from the text, tables, and chart images it found, citing their pages. If the document does not hold the answer, it says so.
 
