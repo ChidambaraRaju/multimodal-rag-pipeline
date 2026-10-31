@@ -188,8 +188,11 @@ frontend/       web UI: React, Vite, TypeScript, Tailwind CSS and shadcn/ui
   src/components/     the question box, each exchange, its sources and figures, markdown with page citations
   src/lib/api.ts      the call to POST /ask, reading its event stream, and error messages
   src/lib/document.ts the document's title, page count and example questions
-evals/          golden sets for evaluating the pipeline with deepeval
-notebooks/      experiments the pipeline grew out of, and the retriever evaluation (07)
+evals/          evaluation with deepeval
+  goldens/            golden sets: questions with reference answers and their pages
+  notebooks/          the notebooks that run them, with their results
+  findings/           a write-up of each experiment
+notebooks/      experiments the pipeline grew out of
 parsed/         saved parse results, cropped images and chart descriptions (not in git)
 ```
 
