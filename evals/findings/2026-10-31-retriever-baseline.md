@@ -2,7 +2,7 @@
 
 The first evaluation of ReportLens's retriever on its own, with the pipeline as ingested on October 25, 2026.
 
-- **Notebook:** `evals/notebooks/retriever_eval.ipynb` (its saved outputs are this run)
+- **Notebook:** `evals/notebooks/retriever_eval.ipynb`. This run's outputs are in the notebook as committed in `5b13479`; it has been re-run since.
 - **Golden set:** `evals/goldens/retriever_goldens.json`, 15 questions
 - **Metrics:** deepeval 4.3.2's Contextual Precision and Contextual Recall
 - **Judge:** `deepseek-flash` (DeepSeek-V4.1-Flash) on DeepSeek's own API, through deepeval's `DeepSeekModel`
@@ -79,20 +79,20 @@ Four of the six answer chunks are tables (`page167-1`, `page52-1`, `page54-1` an
 
 ### 2. Tables are the weak spot; charts are the strong one
 
-Tables scored 0.30 precision and 0.40 recall, the lowest of any content type. The chart descriptions scored highest (1.00 and 0.89). They are written to be searched: the description prompt in `figures.py` asks for the questions a chart could answer and other words people might search for. Text sits between the two.
+Tables scored 0.30 precision and 0.40 recall, the lowest of any content type, and the chart questions the highest (1.00 and 0.89). Chart content can be found two ways: through the chart's description, and through the page's text, where LlamaParse also writes a chart's values as a table. For questions 11 and 12 the page's text ranked first and the chart description second; for question 13 only page text was retrieved. Text questions sit between tables and charts.
 
 ### 3. The eval found two parse problems on pages that run over a page break
 
 - **Pages 43 to 44 were wrongly merged.** LlamaParse merged page 44's Audit Committee box (its members and responsibilities) into page 43's Lead Director table, so it sits in chunk `page43-1` under page 43. The sentence "In Fiscal 2026, the AC met four times" is in no chunk at all. So question 14 cannot reach full recall, whatever the retriever does.
 - **Pages 153 to 154 were not merged.** Each half of Note 7's table is its own chunk. Page 154's begins with only the running header and the date "Jan 26, 2025", with nothing saying what the table is, which may be why neither half was found.
 
-### 4. The judge made at least one mistake, and one score looks generous
+### 4. The judge's scores held up when checked
 
-- **Question 13's recall should be 1.00, not 0.67.** The judge said no chunk gives the other NEOs' pay mix, but the retrieved page 57 chart description lists it (23% SY PSUs, 23% MY PSUs, 46% RSUs, 2% variable cash, 6% base salary).
-- **Question 15's precision of 1.00 is generous.** A score of 1.00 means the judge counted at least the top chunk, the balance sheet, as relevant, though recall shows no chunk holds the reference answer. (The notebook keeps reasons only for scores below 1, so the per-chunk verdicts behind this score were not kept.)
-- **One correct call worth noting:** for question 4, the judge correctly flagged that the retrieved stockholder proposal (page 82) gives a different headcount ("more than 35,000 people") from the human capital section's "approximately 42,000".
+- **Question 13's recall of 0.67 is a retrieval shortfall.** The retrieved page 57 chunk, `page57-2`, is the page's text, where LlamaParse wrote the CEO's pay mix as a table. The other NEOs' pay mix is in the next chunk, `page57-3`, which ranked 6th, so the judge was right that no retrieved chunk holds it. (Corrected on October 31, 2026: this file first called it a judge mistake, after a check that searched for "44%" when the table holds "44".)
+- **Question 15's precision of 1.00 beside a recall of 0.00 is consistent.** Precision counts a chunk as relevant if it helps with any part of the answer, and the top chunk, the balance sheet, holds the marketable securities figures ($51,951 million and $34,621 million). Recall needs each whole sentence of the reference answer supported, and the balance sheet's cash and cash equivalents ($10,605 million and $8,589 million) are not the note's cash equivalents.
+- **For question 4,** the judge correctly flagged that the retrieved stockholder proposal (page 82) gives a different headcount ("more than 35,000 people") from the human capital section's "approximately 42,000".
 
-So the judge's scores are useful for finding failures, but single scores should be checked against the retrieved text before acting on them.
+Single scores should still be checked against the retrieved text before acting on them, since the judge's verdicts also vary between runs (see `2026-10-31-retriever-chart-images.md`).
 
 ## Cost and time
 
@@ -105,5 +105,6 @@ So the judge's scores are useful for finding failures, but single scores should 
 
 - **15 questions, one run.** Each content type has only 2 to 5 questions, so a single question moves its mean a lot. The judge's scores were not repeated to see how much they vary.
 - **Retrieval scores vary slightly.** Rerunning the searches gave the same pages in the same order, but one score changed in the second decimal (question 14's first chunk, 0.68 then 0.67).
+- **The judge saw charts as their descriptions only,** not the images the answering model also gets. The re-run with the images (`2026-10-31-retriever-chart-images.md`) changed no chart score.
 - **Precision is coarse with 3 chunks.** With one relevant chunk, it can only be 1.00, 0.50, 0.33 or 0.
 - **Only the retriever's own query was tested.** The agent writes its own search queries and can search several times, which this stage leaves out on purpose.
