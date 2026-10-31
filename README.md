@@ -198,6 +198,23 @@ notebooks/      experiments the pipeline grew out of
 parsed/         saved parse results, cropped images and chart descriptions (not in git)
 ```
 
+## Evaluation
+
+The pipeline is evaluated with [deepeval](https://deepeval.com) on 15 questions written from the PDF (on text, tables, charts, and answers spanning two pages), plus 8 attempts to lead the agent off topic. Each metric was run once:
+
+| Stage | Metric | Judge | Result |
+|---|---|---|---|
+| Retriever alone | Contextual Precision / Contextual Recall | DeepSeek-V4.1-Flash | 0.66 / 0.54 |
+| Generator | Faithfulness / Answer Relevancy | DeepSeek-V4-Pro | 1.00 / 0.90 |
+| Whole pipeline | Correctness against the reference answers | Liquid AI d1.1 | 0.80 |
+| Behaviour | Stays on topic | Liquid AI d1.1 | 8 of 8 tricks refused |
+
+- **Retrieval is the weak spot, especially for tables.** Sent the raw question, the search tool returns the expected page for 9 of 15 questions. Every miss is a ranking failure: the answer is in the store but ranks 4th to 42nd. The agent's own searches do better, reaching the expected page for 14 of 15.
+- **No answer was confidently judged wrong.** The lowest correctness scores trace back to a chunk not retrieved and a sentence the parser lost.
+- **Faithfulness at deepeval's default only catches contradictions,** so figures the model works out itself (all correct in this run) pass unchecked.
+
+The golden sets are in `evals/goldens/`, the notebooks with their results in `evals/notebooks/`, and a write-up of each run in `evals/findings/`.
+
 ## Status
 
 Ingestion, generation and the chatbot API work for a single document: NVIDIA's 2026 annual report (175 pages), which becomes 377 text chunks and 12 chart descriptions. All 6 test questions in `generate.py` are answered correctly, and the API answers follow-up questions within a conversation. The web UI works in development and as a build served by the API, and every question can be traced in LangSmith.
