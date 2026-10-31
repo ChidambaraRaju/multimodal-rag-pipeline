@@ -1,0 +1,77 @@
+[
+  {
+    "input": "What did NVIDIA get from its December 2025 agreement with Groq, and how much did it pay?",
+    "expected_output": "In December 2025, NVIDIA entered into a non-exclusive license agreement for Groq's language processing unit technology and hired certain Groq employees; it bought no customer contracts, existing products or equity interests. Total consideration was $13.0 billion paid at closing plus $4 billion, inclusive of imputed interest, payable within one year. NVIDIA recorded $14.4 billion of goodwill and a $2.5 billion developed technology intangible asset with a five-year useful life.",
+    "additional_metadata": {"content": "text", "pdf_pages": [149]}
+  },
+  {
+    "input": "How much room does NVIDIA still have to buy back its own shares?",
+    "expected_output": "As of January 25, 2026, NVIDIA was authorized to repurchase up to $58.5 billion of its common stock. On August 26, 2025, the Board approved an additional $60.0 billion of repurchase authorization, without expiration. In fiscal year 2026, NVIDIA repurchased 282 million shares for $40.4 billion.",
+    "additional_metadata": {"content": "text", "pdf_pages": [121]}
+  },
+  {
+    "input": "Why did NVIDIA's gross margin go down in fiscal 2026?",
+    "expected_output": "Gross margin fell from 75.0% in fiscal 2025 to 71.1% in fiscal 2026, down 3.9 points. It decreased as the business moved from offering Hopper HGX systems to Blackwell full-scale datacenter solutions. It was also hit by a $4.5 billion charge associated with H20 excess inventory and purchase obligations.",
+    "additional_metadata": {"content": "text", "pdf_pages": [125]}
+  },
+  {
+    "input": "How big is NVIDIA's workforce, and how many people work in research?",
+    "expected_output": "At the end of fiscal year 2026, NVIDIA had approximately 42,000 employees in 38 countries. About 31,000 worked in research and development, and 11,000 in sales, marketing, operations and administrative positions. More than 80 percent of the workforce have technical roles, and the turnover rate in fiscal 2026 was 3.7 percent.",
+    "additional_metadata": {"content": "text", "pdf_pages": [99]}
+  },
+  {
+    "input": "When and where is the 2026 annual shareholder meeting, and who can vote at it?",
+    "expected_output": "The 2026 Annual Meeting of Stockholders is on Wednesday, June 24, 2026, at 9:00 a.m. Pacific Time. It is held virtually at www.virtualshareholdermeeting.com/NVDA2026. Stockholders of record at the close of business on April 27, 2026, can attend and vote.",
+    "additional_metadata": {"content": "text", "pdf_pages": [20]}
+  },
+  {
+    "input": "What did NVIDIA pay its auditor PwC in fiscal 2026, and how much of that was for the audit itself?",
+    "expected_output": "PwC's fees for fiscal 2026 totaled $13,361,322, up from $10,002,351 for fiscal 2025. Audit fees were $10,166,400, audit-related fees $1,716,820, tax fees $1,076,103, and all other fees $401,999.",
+    "additional_metadata": {"content": "table", "pdf_pages": [78]}
+  },
+  {
+    "input": "How much of NVIDIA's Data Center revenue came from compute and how much from networking?",
+    "expected_output": "In fiscal 2026, Data Center revenue was $193,737 million: $162,361 million from compute and $31,376 million from networking. In fiscal 2025, Data Center revenue was $115,186 million, with $102,196 million from compute and $12,990 million from networking.",
+    "additional_metadata": {"content": "table", "pdf_pages": [167]}
+  },
+  {
+    "input": "How much revenue came from customers based in China, and how did that change from the year before?",
+    "expected_output": "Revenue from customers headquartered in China, including Hong Kong, was $19,677 million in fiscal 2026, down from $25,048 million in fiscal 2025. Revenue is grouped by the location of the customer's headquarters. In fiscal 2026, customers headquartered in the United States accounted for $149,617 million, Taiwan $42,345 million, and other countries $4,299 million.",
+    "additional_metadata": {"content": "table", "pdf_pages": [166]}
+  },
+  {
+    "input": "How much were NVIDIA's non-employee directors paid for fiscal 2026?",
+    "expected_output": "Most non-employee directors received $363,809 for fiscal 2026: $85,000 in cash fees and $278,809 in stock awards. Robert K. Burgess received $342,559, including $63,750 in cash, as he passed away in December 2025. Ellen Ochoa received $321,309, including $42,500 in cash, as she resigned from the Board in July 2025.",
+    "additional_metadata": {"content": "table", "pdf_pages": [52]}
+  },
+  {
+    "input": "Who are NVIDIA's largest shareholders?",
+    "expected_output": "As of March 23, 2026, the largest holders of NVIDIA common stock were BlackRock, Inc., with 1,805,935,550 shares (7.43%), and Vanguard Capital Management, with 1,777,408,252 shares (7.31%). Jen-Hsun Huang beneficially owned 870,604,104 shares (3.58%). Directors and executive officers as a group owned 3.94%.",
+    "additional_metadata": {"content": "table", "pdf_pages": [54]}
+  },
+  {
+    "input": "Which organizations publish the most open-source AI repositories, according to the report?",
+    "expected_output": "A chart titled \"NVIDIA is World's Largest Contributor to Open-Source AI\" counts repositories on Hugging Face from January 2025 to February 2026. NVIDIA has the most, more than 400. Alibaba Cloud is second, followed by Hugging Face and Ai2 at about 200 each. Meta, Google, IBM, ByteDance, Baidu, Tencent, Microsoft and Z.ai have fewer.",
+    "additional_metadata": {"content": "chart", "pdf_pages": [7]}
+  },
+  {
+    "input": "How much cash has NVIDIA returned to shareholders over the past one, three and five years?",
+    "expected_output": "NVIDIA returned $41.4 billion to shareholders over 1 year: $40.4 billion in stock repurchases and $1.0 billion in dividends. Over 3 years it returned $86.3 billion: $84.1 billion in repurchases and $2.2 billion in dividends. Over 5 years it returned $97.2 billion: $94.2 billion in repurchases and $3.0 billion in dividends.",
+    "additional_metadata": {"content": "chart", "pdf_pages": [24]}
+  },
+  {
+    "input": "How is the CEO's target pay for fiscal 2026 split between salary, cash and stock awards?",
+    "expected_output": "The CEO's fiscal 2026 target pay mix was 44% SY PSUs, 44% MY PSUs, 8% variable cash and 4% base salary. 96% of the CEO's fiscal 2026 total target pay depended on corporate performance. For the other NEOs, the average target pay mix was 23% SY PSUs, 23% MY PSUs, 46% RSUs, 2% variable cash and 6% base salary.",
+    "additional_metadata": {"content": "chart", "pdf_pages": [57]}
+  },
+  {
+    "input": "Who chairs each of the Board's committees, and how often did each committee meet in fiscal 2026?",
+    "expected_output": "The Board has three committees. A. Brooke Seawell chairs the Audit Committee, which met four times in fiscal 2026. Dawn Hudson chairs the Compensation Committee, which met three times. Stephen C. Neal chairs the Nominating and Corporate Governance Committee, which met three times.",
+    "additional_metadata": {"content": "multi_page", "pdf_pages": [44, 45]}
+  },
+  {
+    "input": "How much did NVIDIA hold in cash equivalents and marketable securities at the end of fiscal 2026, compared with a year earlier?",
+    "expected_output": "As of January 25, 2026, cash equivalents and marketable securities had an estimated fair value of $65,076 million: $8,285 million reported as cash equivalents, $51,951 million as marketable securities and $4,840 million in other assets. As of January 26, 2025, the total was $42,487 million: $7,866 million in cash equivalents and $34,621 million in marketable securities.",
+    "additional_metadata": {"content": "multi_page", "pdf_pages": [153, 154]}
+  }
+]
